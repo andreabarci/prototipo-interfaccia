@@ -44,6 +44,45 @@ html, body {
   color: var(--ink-2);
 }
 
+/* Schermata con password */
+body.locked .app { visibility: hidden; }
+
+.gate {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: var(--bg);
+}
+.gate__box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 300px;
+  padding: 24px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.gate__box label { font-weight: 600; }
+.gate__box input,
+.gate__box button {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.gate__box button {
+  background: var(--ink);
+  color: var(--panel);
+  border-color: var(--ink);
+  cursor: pointer;
+}
+.gate__error { margin: 0; color: #b8382d; font-size: 13px; }
+
 /* Su schermi stretti i pannelli vanno sotto la mappa */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }

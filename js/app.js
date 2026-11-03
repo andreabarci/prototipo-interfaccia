@@ -1,7 +1,8 @@
 // Avvio della mappa. Per ora serve solo a verificare che tutto funzioni:
 // token, stile, caricamento dei dati e pubblicazione.
 
-(function () {
+// La mappa parte solo dopo la password (vedi js/gate.js).
+window.startApp = function () {
   const mapEl = document.getElementById("map");
 
   if (!CONFIG.mapboxToken || CONFIG.mapboxToken.startsWith("INCOLLA")) {
@@ -48,4 +49,4 @@
     map.on("mouseenter", "prova-punti", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "prova-punti", () => (map.getCanvas().style.cursor = ""));
   });
-})();
+};

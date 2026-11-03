@@ -19,10 +19,62 @@ const FATTORE_GRANDE = 2.5; // quanto più grandi sono i cluster e i marker sele
 const RAGGIO_GRANDE = { 10: RAGGIO_NORMALE[10] * FATTORE_GRANDE, 14: RAGGIO_NORMALE[14] * FATTORE_GRANDE };
 const BORDO_NORMALE = 1.5;
 const BORDO_GRANDE = 3;
+// Quanto del diametro del marker grande occupa l'icona (il resto è il margine colorato attorno).
+const SCALA_ICONA = 0.55;
+
+// Icona per categoria_origine dell'ente (non la categoria semplificata), dalla cartella icons/.
+// Mappatura provvisoria: più categorie di origine possono condividere la stessa icona.
+const ICONA_PER_CATEGORIA = {
+  "Associazione": "associazione",
+  "Associazione / terzo settore": "associazione",
+  "Associazione di promozione sociale": "associazione",
+  "Associazione sportiva dilettantistica": "palestra",
+  "Biblioteca comunale": "biblioteca",
+  "CDI - Centro Diurno Integrato": "centro-diurno",
+  "Casa di Comunità": "poliambulatorio",
+  "Casa di cura / CDCD": "ospedale",
+  "Centri di Incontro e Supporto": "centro-di-ascolto",
+  "Centro culturale/terapeutico": "centro-culturale-terapeutico",
+  "Centro socio-ricreativo": "centro-socio-ricreativo",
+  "Consultorio familiare privato": "consultorio",
+  "Consultorio familiare pubblico": "consultorio",
+  "Cooperativa sociale": "cooperativa",
+  "Ente gestore ADI": "sportello-locale",
+  "Erogatore di servizi": "sportello-locale",
+  "Fondazione / CDCD": "ospedale",
+  "Fondazione / terzo settore": "associazione",
+  "Gruppo di cammino ATS": "gdc",
+  "IRCCS / CDCD": "ospedale",
+  "Istituto geriatrico / CDCD": "ospedale",
+  "Ospedale": "ospedale",
+  "Ospedale / CDCD": "ospedale",
+  "Patronato / CAF": "sportello-locale",
+  "Patronato / terzo settore": "sportello-locale",
+  "Poliambulatorio territoriale": "poliambulatorio",
+  "Presidio ospedaliero ambulatoriale": "poliambulatorio",
+  "RSA - Residenza Sanitaria Assistenziale": "rsa",
+  "Rete parrocchiale / terzo settore": "associazione",
+  "Servizi Sociali Professionali Territoriali (SSPT)": "sportello-locale",
+  "Servizio comunale / rete": "sportello-locale",
+  "Servizio privato": "sportello-locale",
+  "Servizio pubblico": "sportello-locale",
+  "URP - Ufficio Relazioni con il Pubblico": "sportello-locale",
+};
 
 // Bisogni della cartella di questa persona (scenario A, vedi CLAUDE.md):
 // B16 Compagnia e relazioni sociali (persona), C02 sofferenza psicologica (caregiver).
 const BISOGNI_CARTELLA = ["B16", "C02"];
+
+// Carica un'immagine da un indirizzo; usato per le icone di categoria (più semplice e sicuro di
+// map.loadImage, che a seconda della versione di Mapbox restituisce forme diverse della risposta).
+function caricaImmagine(url) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("Immagine non trovata: " + url));
+    img.src = url;
+  });
+}
 
 // Domicilio inventato, zona Monte Stella / QT8 — Municipio 8 di Milano.
 // Non corrisponde a un indirizzo reale: vedi la regola sui dati in CLAUDE.md.
@@ -87,7 +139,13 @@ window.startApp = async function () {
           type: "Feature",
           id: i,
           geometry: { type: "Point", coordinates: [gruppo[0].lon, gruppo[0].lat] },
-          properties: { conta: 1, macro_dominio: gruppo[0].macro_dominio, icona: null },
+          properties: {
+            conta: 1,
+            macro_dominio: gruppo[0].macro_dominio,
+            icona: null,
+            // Icona di categoria: nota da subito, perché un marker singolo è sempre lo stesso ente.
+            icona_categoria: ICONA_PER_CATEGORIA[gruppo[0].categoria_origine] || null,
+          },
         };
       }
       const conteggi = conteggiDominio(gruppo);
@@ -97,7 +155,9 @@ window.startApp = async function () {
         type: "Feature",
         id: i,
         geometry: { type: "Point", coordinates: [gruppo[0].lon, gruppo[0].lat] },
-        properties: { conta: gruppo.length, macro_dominio: null, icona },
+        // icona_categoria resta null finché non si sceglie un ente specifico dal popup del cluster
+        // (viene scritta allora, vedi selezionaMarker più sotto, perché il gruppo ne contiene più d'uno).
+        properties: { conta: gruppo.length, macro_dominio: null, icona, icona_categoria: null },
       };
     }),
   };
@@ -193,7 +253,7 @@ window.startApp = async function () {
 
   let scelto = null; // id numerico della feature "enti-punti" attualmente selezionata
 
-  map.on("load", () => {
+  map.on("load", async () => {
     map.addSource("enti", { type: "geojson", data: geojson });
     for (const [nome, conteggi] of torteDaGenerare) {
       if (!map.hasImage(nome)) map.addImage(nome, disegnaTorta(conteggi), { pixelRatio: PIXELRATIO_TORTA });
@@ -201,8 +261,8 @@ window.startApp = async function () {
 
     // Taglia condivisa: un marker normale a riposo è la base; un cluster a riposo (conta > 1) e un
     // marker selezionato (scelto, singolo o dentro un cluster) sono entrambi RAGGIO_GRANDE — non in
-    // proporzione a quanti enti raggruppa il cluster. Lo spazio in più sul selezionato ospiterà una
-    // piccola icona dell'ente, ancora da disegnare.
+    // proporzione a quanti enti raggruppa il cluster. Lo spazio in più sul selezionato ospita
+    // l'icona di categoria dell'ente (vedi livello enti-icona più sotto).
     const grande = ["any", ["boolean", ["feature-state", "scelto"], false], [">", ["get", "conta"], 1]];
     const raggio = ["interpolate", ["linear"], ["zoom"],
       10, ["case", grande, RAGGIO_GRANDE[10], RAGGIO_NORMALE[10]],
@@ -309,12 +369,52 @@ window.startApp = async function () {
       },
     });
 
+    // Icone di categoria (cartella icons/2x, bianche su sfondo trasparente): si caricano tutte,
+    // anche quelle non ancora usate da nessun ente, così sono pronte per il clic su qualunque marker.
+    // Se un'icona non si trova, lo si segnala in console ma non si blocca il resto della mappa (i
+    // marker sono già tutti a schermo a questo punto, indipendentemente dall'esito).
+    const nomiIcone = new Set(Object.values(ICONA_PER_CATEGORIA));
+    await Promise.all([...nomiIcone].map(async (nome) => {
+      if (map.hasImage(nome)) return;
+      try {
+        const immagine = await caricaImmagine(`icons/2x/icon-${nome}@2x.png`);
+        map.addImage(nome, immagine, { pixelRatio: 2 });
+      } catch (err) {
+        console.warn(err.message);
+      }
+    }));
+
+    // Icona di categoria sul marker selezionato (singolo o scelto dentro un cluster): si vede solo
+    // quando il marker è "scelto", nello spazio in più già riservato quando il marker si ingrandisce.
+    map.addLayer({
+      id: "enti-icona",
+      type: "symbol",
+      source: "enti",
+      layout: {
+        "icon-image": ["get", "icona_categoria"],
+        "icon-size": ["interpolate", ["linear"], ["zoom"],
+          10, (2 * RAGGIO_GRANDE[10] * SCALA_ICONA) / 128,
+          14, (2 * RAGGIO_GRANDE[14] * SCALA_ICONA) / 128],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-opacity": ["case", ["boolean", ["feature-state", "scelto"], false], 1, 0],
+      },
+    });
+
     const LAYER_ENTI = ["enti-punti", "enti-cluster-torta", "enti-cluster-scelto"];
 
     function selezionaMarker(featureId, ente) {
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
       scelto = featureId;
       map.setFeatureState({ source: "enti", id: scelto }, { scelto: true, coloreScelto: COLORI[ente.macro_dominio] || COLORE_CLUSTER });
+      if (gruppiArray[featureId].length > 1) {
+        // L'icona di un marker singolo è già nei dati (icona_categoria): qui invece va scritta,
+        // perché il cluster raggruppa enti di categorie diverse e cambia a ogni scelta.
+        geojson.features[featureId].properties.icona_categoria = ICONA_PER_CATEGORIA[ente.categoria_origine] || null;
+        map.getSource("enti").setData(geojson);
+      }
       mostraEnte(ente.id);
     }
 

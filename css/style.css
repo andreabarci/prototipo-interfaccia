@@ -180,3 +180,19 @@ body.locked .app { visibility: hidden; }
   font: 13px/1.3 var(--font);
   border-radius: 4px;
 }
+
+/* Popup per scegliere l'ente quando più di uno condivide lo stesso punto */
+.scelta-ente__lista { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.scelta-ente__lista button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.scelta-ente__lista button:hover { background: var(--bg); }

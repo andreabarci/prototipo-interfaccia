@@ -88,3 +88,13 @@ body.locked .app { visibility: hidden; }
   .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }
   .stage { order: -1; }
 }
+
+/* Primo caricamento: stili provvisori della legenda e dell'elenco servizi */
+.legenda, .servizi { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.legenda li { display: flex; align-items: center; gap: 8px; }
+.pallino { width: 10px; height: 10px; border-radius: 50%; border: 1px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+.panel h2 { font-size: 17px; margin: 0 0 4px; }
+.meta { color: var(--ink-2); font-size: 12px; }
+.bis { font-size: 12px; }
+.servizi li { padding-top: 8px; border-top: 1px solid var(--line); }
+.nota { color: var(--ink-2); font-size: 12px; }

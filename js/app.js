@@ -67,9 +67,20 @@ window.startApp = async function () {
     <div class="blocco">
       <p class="eyebrow">Bisogni espressi e validati</p>
       <ul class="bisogni">
-        ${bisogniPersona.map((b) => `<li><span class="bis-dim">${b.dimensione}</span>${b.nome}</li>`).join("")}
+        ${bisogniPersona.map((b) => `
+          <li>
+            <button type="button" class="bisogno-btn" data-id="${b.id}">
+              <span class="bis-dim">${b.dimensione}</span>${b.nome}
+            </button>
+          </li>`).join("")}
       </ul>
     </div>`;
+
+  // Enti (sede) che hanno almeno un servizio pertinente a ciascun bisogno: definisce il ventaglio.
+  const sediPerBisogno = {};
+  for (const s of servizi) {
+    for (const b of s.bisogni) (sediPerBisogno[b] ||= new Set()).add(s.sede);
+  }
 
   // ---------- mappa
   mapboxgl.accessToken = CONFIG.mapboxToken;
@@ -101,6 +112,8 @@ window.startApp = async function () {
           "#888888"],
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], 3, 1],
+        "circle-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], 0.25, 1],
+        "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], 0.25, 1],
       },
     });
 
@@ -121,6 +134,23 @@ window.startApp = async function () {
       popup.setLngLat(f.geometry.coordinates).setHTML(`<strong>${f.properties.nome}</strong>`).addTo(map);
     });
     map.on("mouseleave", "enti-punti", () => popup.remove());
+
+    // ---------- ventaglio: clic su un bisogno nella tendina sinistra
+    // Un bisogno alla volta: i marker pertinenti restano come sono, gli altri si attenuano (non spariscono).
+    let bisognoSelezionato = null;
+    const bottoniBisogno = document.querySelectorAll(".bisogno-btn");
+
+    function selezionaBisogno(id) {
+      bisognoSelezionato = bisognoSelezionato === id ? null : id;
+      const pertinenti = bisognoSelezionato ? (sediPerBisogno[bisognoSelezionato] || new Set()) : null;
+      for (const e of sulla_mappa) {
+        const attenuato = pertinenti ? !pertinenti.has(e.id) : false;
+        map.setFeatureState({ source: "enti", id: Number(e.id.slice(1)) }, { attenuato });
+      }
+      bottoniBisogno.forEach((btn) => btn.classList.toggle("attivo", btn.dataset.id === bisognoSelezionato));
+    }
+
+    bottoniBisogno.forEach((btn) => btn.addEventListener("click", () => selezionaBisogno(btn.dataset.id)));
   });
 
   // ---------- tendina destra: servizi presso l'ente (si apre solo con un marker selezionato)

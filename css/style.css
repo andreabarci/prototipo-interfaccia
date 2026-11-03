@@ -126,7 +126,22 @@ body.locked .app { visibility: hidden; }
 
 /* Tendina sinistra: blocchi della cartella (domicilio, bisogni) */
 .blocco { margin-top: 20px; }
-.bisogni li { padding: 6px 8px; border: 1px solid var(--line); border-radius: 4px; font-size: 13px; }
+.bisogno-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 13px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.bisogno-btn:hover { background: var(--bg); }
+.bisogno-btn.attivo { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.bisogno-btn.attivo .bis-dim { color: var(--panel); opacity: .7; }
 .bis-dim { display: block; color: var(--ink-2); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 
 .domicilio-form { display: flex; gap: 6px; }

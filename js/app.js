@@ -6,8 +6,9 @@
 // La mappa parte solo dopo la password (vedi js/gate.js).
 // Colori provvisori per macrodominio (da ridisegnare)
 const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8a7f" };
-// Colore provvisorio per i marker che raggruppano enti di macrodomini diversi sullo stesso punto.
-const COLORE_CLUSTER = "#44484c";
+// Colore neutro (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css) per i marker che
+// raggruppano enti di macrodomini diversi sullo stesso punto.
+const COLORE_CLUSTER = "#5a666e";
 // Opacità dei marker non pertinenti al bisogno scelto (attenuati, non spariscono).
 const OPACITA_ATTENUATA = 0.1;
 
@@ -125,15 +126,29 @@ window.startApp = async function () {
       type: "circle",
       source: "enti",
       paint: {
+        // A riposo: i cluster (conta > 1) sono leggermente più grandi di un marker singolo, ma non
+        // in proporzione a quanti enti raggruppano. Da selezionato (scelto): più grande di entrambi,
+        // per lasciare spazio a una piccola icona dell'ente — l'icona vera e propria è da disegnare.
         "circle-radius": ["interpolate", ["linear"], ["zoom"],
-          10, ["case", [">", ["get", "conta"], 1], 6, 3.5],
-          14, ["case", [">", ["get", "conta"], 1], 10, 7]],
-        "circle-color": ["match", ["get", "macro_dominio"],
-          "sanitario", COLORI.sanitario,
-          "sociosanitario", COLORI.sociosanitario,
-          "sociale", COLORI.sociale,
-          "misto", COLORE_CLUSTER,
-          "#888888"],
+          10, ["case",
+            ["boolean", ["feature-state", "scelto"], false], 11,
+            [">", ["get", "conta"], 1], 6,
+            3.5],
+          14, ["case",
+            ["boolean", ["feature-state", "scelto"], false], 16,
+            [">", ["get", "conta"], 1], 10,
+            7]],
+        // Un marker scelto dentro un cluster prende il colore di quell'ente specifico (coloreScelto,
+        // impostato al clic): così copre visivamente gli altri enti impilati sullo stesso punto.
+        "circle-color": ["case",
+          ["all", [">", ["get", "conta"], 1], ["boolean", ["feature-state", "scelto"], false]],
+          ["feature-state", "coloreScelto"],
+          ["match", ["get", "macro_dominio"],
+            "sanitario", COLORI.sanitario,
+            "sociosanitario", COLORI.sociosanitario,
+            "sociale", COLORI.sociale,
+            "misto", COLORE_CLUSTER,
+            "#888888"]],
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], 3, 1],
         "circle-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1],
@@ -156,15 +171,20 @@ window.startApp = async function () {
       },
       paint: {
         "text-color": "#ffffff",
-        "text-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1],
+        // Se un ente del gruppo è selezionato, il numero si nasconde: il marker di quell'ente
+        // copre temporaneamente lo stack, finché non si deseleziona o si chiude la tendina destra.
+        "text-opacity": ["case",
+          ["boolean", ["feature-state", "scelto"], false], 0,
+          ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA,
+          1],
       },
     });
 
-    function selezionaMarker(featureId, enteId) {
-      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false });
+    function selezionaMarker(featureId, ente) {
+      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
       scelto = featureId;
-      map.setFeatureState({ source: "enti", id: scelto }, { scelto: true });
-      mostraEnte(enteId);
+      map.setFeatureState({ source: "enti", id: scelto }, { scelto: true, coloreScelto: COLORI[ente.macro_dominio] || COLORE_CLUSTER });
+      mostraEnte(ente.id);
     }
 
     // Più enti sullo stesso punto: un popup fa scegliere a quale accedere.
@@ -180,7 +200,7 @@ window.startApp = async function () {
         btn.type = "button";
         btn.textContent = e.nome;
         btn.addEventListener("click", () => {
-          selezionaMarker(f.id, e.id);
+          selezionaMarker(f.id, e);
           popupScelta.remove();
         });
         li.appendChild(btn);
@@ -193,7 +213,7 @@ window.startApp = async function () {
     map.on("click", "enti-punti", (ev) => {
       const f = ev.features[0];
       const gruppo = gruppiArray[f.id];
-      if (gruppo.length === 1) selezionaMarker(f.id, gruppo[0].id);
+      if (gruppo.length === 1) selezionaMarker(f.id, gruppo[0]);
       else apriSceltaEnte(f, gruppo);
     });
     map.on("mouseenter", "enti-punti", () => (map.getCanvas().style.cursor = "pointer"));
@@ -260,7 +280,7 @@ window.startApp = async function () {
   panelDxClose.addEventListener("click", () => {
     appEl.classList.add("dx-closed");
     if (scelto !== null) {
-      map.setFeatureState({ source: "enti", id: scelto }, { scelto: false });
+      map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
       scelto = null;
     }
   });

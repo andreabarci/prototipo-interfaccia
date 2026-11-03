@@ -1,0 +1,51 @@
+/* Base del prototipo. Gli elementi grafici veri arriveranno dopo. */
+
+:root {
+  --bg: #f4f5f5;
+  --panel: #ffffff;
+  --ink: #1d2428;
+  --ink-2: #5a666e;
+  --line: #d6dde0;
+  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 14px/1.45 var(--font);
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 320px;
+  height: 100%;
+}
+
+.stage { position: relative; }
+#map { position: absolute; inset: 0; }
+
+.panel {
+  background: var(--panel);
+  padding: 16px;
+  overflow: auto;
+}
+.panel--sx { border-right: 1px solid var(--line); }
+.panel--dx { border-left: 1px solid var(--line); }
+
+.eyebrow {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* Su schermi stretti i pannelli vanno sotto la mappa */
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; grid-template-rows: 60vh auto auto; }
+  .stage { order: -1; }
+}

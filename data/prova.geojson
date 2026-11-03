@@ -1,0 +1,10 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "nome": "Punto di prova (Duomo)" },
+      "geometry": { "type": "Point", "coordinates": [9.1919, 45.4641] }
+    }
+  ]
+}

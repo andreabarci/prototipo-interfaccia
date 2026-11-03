@@ -6,11 +6,19 @@
 // La mappa parte solo dopo la password (vedi js/gate.js).
 // Colori provvisori per macrodominio (da ridisegnare)
 const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8a7f" };
-// Colore neutro (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css) per i marker che
-// raggruppano enti di macrodomini diversi sullo stesso punto.
+// Colore di riserva (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css), usato solo se
+// un ente scelto dentro un cluster non ha un macrodominio riconosciuto.
 const COLORE_CLUSTER = "#5a666e";
 // Opacità dei marker non pertinenti al bisogno scelto (attenuati, non spariscono).
 const OPACITA_ATTENUATA = 0.1;
+
+// Taglie condivise fra marker singoli, cluster e stato selezionato: un'unica fonte di verità, così
+// un cluster a riposo e un marker selezionato risultano sempre identici (stessa taglia, stesso bordo).
+const RAGGIO_NORMALE = { 10: 3.5, 14: 7 }; // marker singolo a riposo, per fermata di zoom
+const FATTORE_GRANDE = 2.5; // quanto più grandi sono i cluster e i marker selezionati rispetto al normale
+const RAGGIO_GRANDE = { 10: RAGGIO_NORMALE[10] * FATTORE_GRANDE, 14: RAGGIO_NORMALE[14] * FATTORE_GRANDE };
+const BORDO_NORMALE = 1.5;
+const BORDO_GRANDE = 3;
 
 // Bisogni della cartella di questa persona (scenario A, vedi CLAUDE.md):
 // B16 Compagnia e relazioni sociali (persona), C02 sofferenza psicologica (caregiver).
@@ -55,21 +63,87 @@ window.startApp = async function () {
   }
   const gruppiArray = Array.from(gruppiMap.values());
 
+  // Per ogni cluster, quanti enti per macrodominio: serve per disegnare la "torta" del marker.
+  function conteggiDominio(gruppo) {
+    const c = { sanitario: 0, sociosanitario: 0, sociale: 0, altro: 0 };
+    for (const e of gruppo) {
+      if (c[e.macro_dominio] !== undefined) c[e.macro_dominio]++;
+      else c.altro++;
+    }
+    return c;
+  }
+  function nomeTorta(c) {
+    return "torta-" + c.sanitario + "-" + c.sociosanitario + "-" + c.sociale + "-" + c.altro;
+  }
+
+  // Immagini da generare (una per ogni diversa composizione di cluster) e passare a map.addImage.
+  const torteDaGenerare = new Map(); // nome immagine -> conteggi
+
   const geojson = {
     type: "FeatureCollection",
     features: gruppiArray.map((gruppo, i) => {
-      const domini = new Set(gruppo.map((e) => e.macro_dominio));
+      if (gruppo.length === 1) {
+        return {
+          type: "Feature",
+          id: i,
+          geometry: { type: "Point", coordinates: [gruppo[0].lon, gruppo[0].lat] },
+          properties: { conta: 1, macro_dominio: gruppo[0].macro_dominio, icona: null },
+        };
+      }
+      const conteggi = conteggiDominio(gruppo);
+      const icona = nomeTorta(conteggi);
+      torteDaGenerare.set(icona, conteggi);
       return {
         type: "Feature",
         id: i,
         geometry: { type: "Point", coordinates: [gruppo[0].lon, gruppo[0].lat] },
-        properties: {
-          conta: gruppo.length,
-          macro_dominio: domini.size === 1 ? gruppo[0].macro_dominio : "misto",
-        },
+        properties: { conta: gruppo.length, macro_dominio: null, icona },
       };
     }),
   };
+
+  // Disegna la "torta" di un cluster su un canvas: una fetta colorata per enti dello stesso
+  // macrodominio, bordo bianco come gli altri marker. Il numero è un livello separato (enti-numero).
+  // Il canvas rappresenta, a icon-size 1, esattamente RAGGIO_GRANDE (vedi icon-size più sotto):
+  // il bordo bianco è un anello interno di spessore BORDO_GRANDE, così il raggio totale e il bordo
+  // combaciano esattamente con quelli dei marker a tinta piena (nessun margine a parte).
+  const PIXELRATIO_TORTA = 2;
+  const RISOLUZIONE_TORTA = 128; // px fisici del canvas (pixelRatio 2 → 64 px logici a icon-size 1)
+  function disegnaTorta(conteggi) {
+    const canvas = document.createElement("canvas");
+    canvas.width = canvas.height = RISOLUZIONE_TORTA;
+    const ctx = canvas.getContext("2d");
+    const centro = RISOLUZIONE_TORTA / 2; // raggio esterno totale (bordo incluso), in px fisici
+    const bordoPx = BORDO_GRANDE * PIXELRATIO_TORTA;
+    const raggioFetta = centro - bordoPx; // la parte colorata, prima del bordo
+    const fette = [
+      ["sanitario", COLORI.sanitario],
+      ["sociosanitario", COLORI.sociosanitario],
+      ["sociale", COLORI.sociale],
+      ["altro", "#888888"],
+    ];
+    const totale = conteggi.sanitario + conteggi.sociosanitario + conteggi.sociale + conteggi.altro || 1;
+    let angolo = -Math.PI / 2;
+    for (const [chiave, colore] of fette) {
+      const n = conteggi[chiave];
+      if (!n) continue;
+      const quota = (n / totale) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(centro, centro);
+      ctx.arc(centro, centro, raggioFetta, angolo, angolo + quota);
+      ctx.closePath();
+      ctx.fillStyle = colore;
+      ctx.fill();
+      angolo += quota;
+    }
+    // Bordo bianco: anello esterno, da raggioFetta a centro (spessore BORDO_GRANDE).
+    ctx.beginPath();
+    ctx.arc(centro, centro, centro - bordoPx / 2, 0, Math.PI * 2);
+    ctx.lineWidth = bordoPx;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+    return ctx.getImageData(0, 0, RISOLUZIONE_TORTA, RISOLUZIONE_TORTA);
+  }
 
   // ---------- tendina sinistra: cartella della persona (domicilio e bisogni)
   const bisogniPersona = BISOGNI_CARTELLA.map((id) => bisognoById[id]).filter(Boolean);
@@ -121,42 +195,97 @@ window.startApp = async function () {
 
   map.on("load", () => {
     map.addSource("enti", { type: "geojson", data: geojson });
+    for (const [nome, conteggi] of torteDaGenerare) {
+      if (!map.hasImage(nome)) map.addImage(nome, disegnaTorta(conteggi), { pixelRatio: PIXELRATIO_TORTA });
+    }
+
+    // Taglia condivisa: un marker normale a riposo è la base; un cluster a riposo (conta > 1) e un
+    // marker selezionato (scelto, singolo o dentro un cluster) sono entrambi RAGGIO_GRANDE — non in
+    // proporzione a quanti enti raggruppa il cluster. Lo spazio in più sul selezionato ospiterà una
+    // piccola icona dell'ente, ancora da disegnare.
+    const grande = ["any", ["boolean", ["feature-state", "scelto"], false], [">", ["get", "conta"], 1]];
+    const raggio = ["interpolate", ["linear"], ["zoom"],
+      10, ["case", grande, RAGGIO_GRANDE[10], RAGGIO_NORMALE[10]],
+      14, ["case", grande, RAGGIO_GRANDE[14], RAGGIO_NORMALE[14]]];
+    const opacitaAttenuabile = ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1];
+
+    // Ombra leggera sotto ogni marker e cluster, per distinguerli dal piano della mappa.
+    map.addLayer({
+      id: "enti-ombra",
+      type: "circle",
+      source: "enti",
+      paint: {
+        "circle-radius": raggio,
+        "circle-color": "#000000",
+        "circle-blur": 0.7,
+        "circle-translate": [1, 2],
+        "circle-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], 0.03, 0.22],
+      },
+    });
+
+    // Marker singoli: un ente per punto, colorato per macrodominio.
     map.addLayer({
       id: "enti-punti",
       type: "circle",
       source: "enti",
+      filter: ["==", ["get", "conta"], 1],
       paint: {
-        // A riposo: i cluster (conta > 1) sono leggermente più grandi di un marker singolo, ma non
-        // in proporzione a quanti enti raggruppano. Da selezionato (scelto): più grande di entrambi,
-        // per lasciare spazio a una piccola icona dell'ente — l'icona vera e propria è da disegnare.
-        "circle-radius": ["interpolate", ["linear"], ["zoom"],
-          10, ["case",
-            ["boolean", ["feature-state", "scelto"], false], 11,
-            [">", ["get", "conta"], 1], 6,
-            3.5],
-          14, ["case",
-            ["boolean", ["feature-state", "scelto"], false], 16,
-            [">", ["get", "conta"], 1], 10,
-            7]],
-        // Un marker scelto dentro un cluster prende il colore di quell'ente specifico (coloreScelto,
-        // impostato al clic): così copre visivamente gli altri enti impilati sullo stesso punto.
-        "circle-color": ["case",
-          ["all", [">", ["get", "conta"], 1], ["boolean", ["feature-state", "scelto"], false]],
-          ["feature-state", "coloreScelto"],
-          ["match", ["get", "macro_dominio"],
-            "sanitario", COLORI.sanitario,
-            "sociosanitario", COLORI.sociosanitario,
-            "sociale", COLORI.sociale,
-            "misto", COLORE_CLUSTER,
-            "#888888"]],
+        "circle-radius": raggio,
+        "circle-color": ["match", ["get", "macro_dominio"],
+          "sanitario", COLORI.sanitario,
+          "sociosanitario", COLORI.sociosanitario,
+          "sociale", COLORI.sociale,
+          "#888888"],
         "circle-stroke-color": "#ffffff",
-        "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], 3, 1],
-        "circle-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1],
-        "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1],
+        "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], BORDO_GRANDE, BORDO_NORMALE],
+        "circle-opacity": opacitaAttenuabile,
+        "circle-stroke-opacity": opacitaAttenuabile,
       },
     });
 
-    // Numero di enti raggruppati su uno stesso punto (visibile solo quando sono più di uno).
+    // Cluster a riposo: la "torta" dei macrodomini raggruppati (immagine disegnata sopra).
+    // L'immagine è disegnata a icon-size 1 con raggio esterno RISOLUZIONE_TORTA/2 fisici (64 logici,
+    // pixelRatio 2): l'icon-size qui sotto la scala esattamente a RAGGIO_GRANDE, in modo che il
+    // cluster risulti sempre della stessa taglia (e stesso bordo) di un marker selezionato.
+    map.addLayer({
+      id: "enti-cluster-torta",
+      type: "symbol",
+      source: "enti",
+      filter: [">", ["get", "conta"], 1],
+      layout: {
+        "icon-image": ["get", "icona"],
+        "icon-size": ["interpolate", ["linear"], ["zoom"],
+          10, RAGGIO_GRANDE[10] / 32,
+          14, RAGGIO_GRANDE[14] / 32],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        // Si nasconde quando un ente del gruppo è scelto: prende il suo posto il marker a tinta piena.
+        "icon-opacity": ["case",
+          ["boolean", ["feature-state", "scelto"], false], 0,
+          ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA,
+          1],
+      },
+    });
+
+    // Cluster scelto: un ente del gruppo è stato scelto dal popup, il suo colore copre la torta.
+    map.addLayer({
+      id: "enti-cluster-scelto",
+      type: "circle",
+      source: "enti",
+      filter: [">", ["get", "conta"], 1],
+      paint: {
+        "circle-radius": raggio,
+        "circle-color": ["feature-state", "coloreScelto"],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": BORDO_GRANDE,
+        "circle-opacity": ["case", ["boolean", ["feature-state", "scelto"], false], 1, 0],
+        "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "scelto"], false], 1, 0],
+      },
+    });
+
+    // Numero di enti raggruppati su uno stesso punto, al centro della torta, scritto in bianco.
     map.addLayer({
       id: "enti-numero",
       type: "symbol",
@@ -179,6 +308,8 @@ window.startApp = async function () {
           1],
       },
     });
+
+    const LAYER_ENTI = ["enti-punti", "enti-cluster-torta", "enti-cluster-scelto"];
 
     function selezionaMarker(featureId, ente) {
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
@@ -210,18 +341,18 @@ window.startApp = async function () {
       popupScelta.setLngLat(f.geometry.coordinates).setDOMContent(el).addTo(map);
     }
 
-    map.on("click", "enti-punti", (ev) => {
+    map.on("click", LAYER_ENTI, (ev) => {
       const f = ev.features[0];
       const gruppo = gruppiArray[f.id];
       if (gruppo.length === 1) selezionaMarker(f.id, gruppo[0]);
       else apriSceltaEnte(f, gruppo);
     });
-    map.on("mouseenter", "enti-punti", () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", "enti-punti", () => (map.getCanvas().style.cursor = ""));
+    map.on("mouseenter", LAYER_ENTI, () => (map.getCanvas().style.cursor = "pointer"));
+    map.on("mouseleave", LAYER_ENTI, () => (map.getCanvas().style.cursor = ""));
 
     // Fumetto al passaggio del mouse: nome dell'ente (o degli enti, se più di uno sullo stesso punto).
     const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 10 });
-    map.on("mousemove", "enti-punti", (ev) => {
+    map.on("mousemove", LAYER_ENTI, (ev) => {
       const f = ev.features[0];
       const gruppo = gruppiArray[f.id];
       const html = gruppo.length === 1
@@ -229,7 +360,7 @@ window.startApp = async function () {
         : `<strong>${gruppo.length} enti in questo edificio</strong><br>${gruppo.map((e) => e.nome).join("<br>")}`;
       popup.setLngLat(f.geometry.coordinates).setHTML(html).addTo(map);
     });
-    map.on("mouseleave", "enti-punti", () => popup.remove());
+    map.on("mouseleave", LAYER_ENTI, () => popup.remove());
 
     // ---------- ventaglio: clic su un bisogno nella tendina sinistra
     // Un bisogno alla volta: i marker pertinenti restano come sono, gli altri si attenuano (non spariscono).

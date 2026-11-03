@@ -23,7 +23,7 @@
     </form>
   </div>
 
-  <div class="app">
+  <div class="app dx-closed" id="app">
     <aside class="panel panel--sx" id="panel-sx">
       <p class="eyebrow">Tendina sinistra</p>
       <p>Cartella della persona e bisogni.</p>
@@ -34,8 +34,11 @@
     </main>
 
     <aside class="panel panel--dx" id="panel-dx">
-      <p class="eyebrow">Tendina destra</p>
-      <p>Servizio selezionato.</p>
+      <button class="panel__close" id="panel-dx-close" type="button" aria-label="Chiudi la tendina">×</button>
+      <div class="panel__content" id="panel-dx-content">
+        <p class="eyebrow">Tendina destra</p>
+        <p>Servizio selezionato.</p>
+      </div>
     </aside>
   </div>
 

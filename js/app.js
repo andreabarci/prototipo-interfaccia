@@ -1,5 +1,5 @@
-// Prototipo · primo caricamento dei dati.
-// Mostra tutti gli enti geolocalizzati come punti; al clic la tendina destra
+// Prototipo · scenario A, Momento 1 ("La cartella della persona").
+// Mostra il domicilio e tutti gli enti come punti; al clic la tendina destra
 // elenca i servizi che si trovano presso quell'ente.
 // Grafica provvisoria: colori, forme e testi verranno progettati dopo.
 
@@ -7,10 +7,21 @@
 // Colori provvisori per macrodominio (da ridisegnare)
 const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8a7f" };
 
+// Bisogni della cartella di questa persona (scenario A, vedi CLAUDE.md):
+// B16 Compagnia e relazioni sociali (persona), C02 sofferenza psicologica (caregiver).
+const BISOGNI_CARTELLA = ["B16", "C02"];
+
+// Domicilio inventato, zona Monte Stella / QT8 — Municipio 8 di Milano.
+// Non corrisponde a un indirizzo reale: vedi la regola sui dati in CLAUDE.md.
+// Si può spostare scrivendo un indirizzo nella tendina sinistra.
+let DOMICILIO = { lat: 45.4809, lon: 9.1385 };
+
 window.startApp = async function () {
   const mapEl = document.getElementById("map");
+  const appEl = document.getElementById("app");
   const panelSx = document.getElementById("panel-sx");
-  const panelDx = document.getElementById("panel-dx");
+  const panelDxContent = document.getElementById("panel-dx-content");
+  const panelDxClose = document.getElementById("panel-dx-close");
 
   if (!CONFIG.mapboxToken || CONFIG.mapboxToken.startsWith("INCOLLA")) {
     mapEl.innerHTML =
@@ -38,18 +49,27 @@ window.startApp = async function () {
     })),
   };
 
-  // ---------- tendina sinistra: riepilogo provvisorio
-  const conta = (k) => sulla_mappa.filter((e) => e.macro_dominio === k).length;
+  // ---------- tendina sinistra: cartella della persona (domicilio e bisogni)
+  const bisogniPersona = BISOGNI_CARTELLA.map((id) => bisognoById[id]).filter(Boolean);
   panelSx.innerHTML = `
-    <p class="eyebrow">Tendina sinistra</p>
-    <p><b>${sulla_mappa.length}</b> enti sulla mappa su ${enti.length} nel repertorio,
-       <b>${servizi.length}</b> servizi.</p>
-    <ul class="legenda">
-      <li><span class="pallino" style="background:${COLORI.sanitario}"></span>Sanitario (${conta("sanitario")})</li>
-      <li><span class="pallino" style="background:${COLORI.sociosanitario}"></span>Sociosanitario (${conta("sociosanitario")})</li>
-      <li><span class="pallino" style="background:${COLORI.sociale}"></span>Sociale (${conta("sociale")})</li>
-    </ul>
-    <p class="nota">Qui andranno la cartella della persona e i bisogni.</p>`;
+    <p class="eyebrow">Cartella della persona</p>
+    <p class="nota">Scenario A · persona e domicilio inventati per il prototipo.</p>
+
+    <div class="blocco">
+      <p class="eyebrow">Domicilio</p>
+      <form class="domicilio-form" id="form-domicilio">
+        <input type="text" id="domicilio-indirizzo" placeholder="Scrivi un indirizzo…" autocomplete="off">
+        <button type="submit">Vai</button>
+      </form>
+      <p class="meta" id="domicilio-stato">Posizione attuale (inventata): ${DOMICILIO.lat.toFixed(4)}, ${DOMICILIO.lon.toFixed(4)}</p>
+    </div>
+
+    <div class="blocco">
+      <p class="eyebrow">Bisogni espressi e validati</p>
+      <ul class="bisogni">
+        ${bisogniPersona.map((b) => `<li><span class="bis-dim">${b.dimensione}</span>${b.nome}</li>`).join("")}
+      </ul>
+    </div>`;
 
   // ---------- mappa
   mapboxgl.accessToken = CONFIG.mapboxToken;
@@ -57,6 +77,14 @@ window.startApp = async function () {
     container: "map", style: CONFIG.mapStyle, center: CONFIG.center, zoom: CONFIG.zoom, language: "it",
   });
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
+
+  // Marker del domicilio: provvisorio, solo per distinguerlo dagli enti (icona definitiva da disegnare).
+  const domicilioMarker = new mapboxgl.Marker({
+    element: Object.assign(document.createElement("div"), { className: "domicilio-marker", title: "Domicilio" }),
+    anchor: "bottom",
+  }).setLngLat([DOMICILIO.lon, DOMICILIO.lat]).addTo(map);
+
+  let scelto = null; // id numerico della feature "enti-punti" attualmente selezionata
 
   map.on("load", () => {
     map.addSource("enti", { type: "geojson", data: geojson });
@@ -76,7 +104,6 @@ window.startApp = async function () {
       },
     });
 
-    let scelto = null;
     map.on("click", "enti-punti", (ev) => {
       const f = ev.features[0];
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false });
@@ -86,9 +113,17 @@ window.startApp = async function () {
     });
     map.on("mouseenter", "enti-punti", () => (map.getCanvas().style.cursor = "pointer"));
     map.on("mouseleave", "enti-punti", () => (map.getCanvas().style.cursor = ""));
+
+    // Fumetto al passaggio del mouse: nome dell'ente.
+    const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 10 });
+    map.on("mousemove", "enti-punti", (ev) => {
+      const f = ev.features[0];
+      popup.setLngLat(f.geometry.coordinates).setHTML(`<strong>${f.properties.nome}</strong>`).addTo(map);
+    });
+    map.on("mouseleave", "enti-punti", () => popup.remove());
   });
 
-  // ---------- tendina destra: servizi presso l'ente
+  // ---------- tendina destra: servizi presso l'ente (si apre solo con un marker selezionato)
   function nomePromotore(p) {
     if (!p) return null;
     return enteById[p] ? enteById[p].nome : p;
@@ -106,11 +141,60 @@ window.startApp = async function () {
       ].filter(Boolean).join(" · ");
       return `<li><b>${s.titolo || "Servizio"}</b><br><span class="meta">${extra}</span><br><span class="bis">${bis}</span></li>`;
     }).join("");
-    panelDx.innerHTML = `
+    panelDxContent.innerHTML = `
       <p class="eyebrow">${e.categoria || ""}</p>
       <h2>${e.nome}</h2>
       <p class="meta">${e.indirizzo || ""}</p>
       <p class="eyebrow">${lista.length} servizi</p>
       <ul class="servizi">${righe}</ul>`;
+    appEl.classList.remove("dx-closed");
   }
+
+  panelDxClose.addEventListener("click", () => {
+    appEl.classList.add("dx-closed");
+    if (scelto !== null) {
+      map.setFeatureState({ source: "enti", id: scelto }, { scelto: false });
+      scelto = null;
+    }
+  });
+
+  // ---------- domicilio: spostarlo scrivendo un indirizzo
+  const formDomicilio = document.getElementById("form-domicilio");
+  const inputIndirizzo = document.getElementById("domicilio-indirizzo");
+  const statoDomicilio = document.getElementById("domicilio-stato");
+
+  // Geocodifica con Mapbox, con preferenza per l'area di Milano.
+  async function geocodifica(testo) {
+    const url = "https://api.mapbox.com/geocoding/v5/mapbox.places/" + encodeURIComponent(testo) + ".json"
+      + "?access_token=" + CONFIG.mapboxToken
+      + "&language=it&limit=1&country=IT"
+      + "&proximity=" + CONFIG.center[0] + "," + CONFIG.center[1]
+      + "&bbox=9.01,45.38,9.33,45.55"; // area di Milano, per non trovare indirizzi altrove
+    const risposta = await fetch(url);
+    const dati = await risposta.json();
+    return (dati.features && dati.features[0]) || null;
+  }
+
+  formDomicilio.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    const testo = inputIndirizzo.value.trim();
+    if (!testo) return;
+    statoDomicilio.textContent = "Cerco…";
+    let trovato;
+    try {
+      trovato = await geocodifica(testo);
+    } catch {
+      statoDomicilio.textContent = "Errore nella ricerca dell'indirizzo.";
+      return;
+    }
+    if (!trovato) {
+      statoDomicilio.textContent = "Indirizzo non trovato.";
+      return;
+    }
+    const [lon, lat] = trovato.center;
+    DOMICILIO = { lat, lon };
+    domicilioMarker.setLngLat([lon, lat]);
+    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 14) });
+    statoDomicilio.textContent = "Domicilio impostato: " + trovato.place_name;
+  });
 };

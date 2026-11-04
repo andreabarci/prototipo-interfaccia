@@ -9,7 +9,8 @@ const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8
 // Colore di riserva (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css), usato solo se
 // un ente scelto dentro un cluster non ha un macrodominio riconosciuto.
 const COLORE_CLUSTER = "#5a666e";
-// Opacità dei marker non pertinenti al bisogno scelto (attenuati, non spariscono).
+// Opacità dei marker non pertinenti al bisogno scelto (attenuati, non spariscono). Riusata anche nel
+// percorso per i marker che non ricevono un ramo di equivalenza.
 const OPACITA_ATTENUATA = 0.1;
 
 // Taglie condivise fra marker singoli, cluster e stato selezionato: un'unica fonte di verità, così
@@ -21,6 +22,53 @@ const BORDO_NORMALE = 1.5;
 const BORDO_GRANDE = 3;
 // Quanto del diametro del marker grande occupa l'icona (il resto è il margine colorato attorno).
 const SCALA_ICONA = 0.55;
+// In hover, un marker singolo o un cluster crescono leggermente (sulla taglia che hanno già) per far
+// capire su quale ci si trova; la loro ombra si intensifica un poco. Riusano "inEvidenzaMarker".
+const FATTORE_HOVER_MARKER = 1.15;
+// Raggio dell'ombra = raggio del marker × questo fattore, a ogni taglia (proporzionale, non un
+// margine fisso): con un marker da 3,5px l'ombra arriva a 5px, come richiesto.
+const OMBRA_FATTORE = 5 / 3.5;
+// circle-blur è una sfumatura proporzionale al raggio: con un valore alto, la parte che sporge dal
+// marker (l'unica visibile) cade quasi tutta già dentro la zona sfumata, e si vede pochissimo —
+// per questo va tenuta bassa, non "morbida", anche se il margine sopra sembra già abbondante.
+const OMBRA_SFUMATURA = 0.2;
+const OMBRA_SCARTO = [0, 0]; // circle-translate: centrata sul marker, non spostata di lato
+const OMBRA_OPACITA = 0.125; // marker acceso, a riposo
+const OMBRA_OPACITA_HOVER = 0.19;
+// Nessuna costante per l'ombra attenuata: è sempre zero, vedi il livello "enti-ombra".
+
+// Etichetta col nome dell'ente (hover, marker selezionato, marker collegato da un ramo): nessun
+// contenitore, colorata come il marker, con un bordo bianco (halo) per restare leggibile sulla mappa.
+const ETICHETTA_DIMENSIONE = 12;
+const ETICHETTA_BORDO_COLORE = "#ffffff";
+const ETICHETTA_BORDO_SPESSORE = 1.3;
+// Distanza fissa, in px, fra il BORDO del marker e il testo — sempre la stessa, che il marker sia
+// normale, grande (selezionato) o un cluster: calcolata su misura per ciascuna taglia (vedi
+// offsetEtichetta più sotto), non su un'unica distanza dal centro, altrimenti varierebbe col raggio.
+const ETICHETTA_MARGINE = 9;
+
+// Tendina destra: bisogni a tendina (accordion) sopra i servizi dell'ente. Valori qui, passati al
+// CSS come variabili personalizzate all'avvio di startApp (vedi sotto), così restano in un solo posto.
+const TENDINA_DURATA_MS = 200; // apertura/chiusura di un bisogno
+const TENDINA_RIENTRO = "10px"; // margine a sinistra dei servizi sotto un bisogno aperto
+const TENDINA_COLORE_INTESTAZIONE_ATTIVA = "#1d2428"; // stesso trattamento del bisogno attivo in tendina sinistra
+
+// Rami di equivalenza tra servizi (Momento 4-5 dello scenario A): valori grafici provvisori,
+// raccolti qui perché Andrea possa ritoccarli a mano. La regola di equivalenza (stesso bisogno già
+// selezionato + stessa categoria semplificata dell'ente) è discussa e confermata con Andrea.
+// Provvisori: i colori definitivi li decide Andrea. A riposo tutti i rami sono grigio chiaro;
+// solo quello sotto il cursore (o il cui marker collegato è in hover) diventa grigio scuro e più spesso.
+const RAMO_COLORE_RIPOSO = "#aab1b6";
+const RAMO_COLORE_HOVER = "#1d2428";
+const RAMO_SPESSORE = 0.75; // a metà fra 1 (il valore originale) e 0,5 (l'ultimo, dimezzato)
+const RAMO_SPESSORE_HOVER = 1.75;
+const RAMO_OPACITA = 0.9; // a riposo
+const RAMO_OPACITA_HOVER = 1; // il ramo in evidenza
+const RAMO_OPACITA_SPENTO = 0.15; // tutti gli altri, mentre uno è in evidenza (per leggere le etichette)
+const RAMO_CURVATURA = 0.15; // spostamento del punto di controllo, in percentuale della lunghezza del ramo
+const RAMO_CAMPIONI = 40; // punti con cui si disegna la curva
+const RAMO_FASCIA_HOVER = 12; // larghezza in px dell'area sensibile invisibile sotto il ramo
+const DISSOLVENZA_MS = 200; // durata della dissolvenza: comparsa dei rami, attenuazione dei marker
 
 // Icona per categoria_origine dell'ente (non la categoria semplificata), dalla cartella icons/.
 // Mappatura provvisoria: più categorie di origine possono condividere la stessa icona.
@@ -76,12 +124,40 @@ function caricaImmagine(url) {
   });
 }
 
+// Punto intermedio di una curva di Bézier quadratica: il punto di controllo è spostato in
+// perpendicolare al segmento p0→p1, dal lato "destro" (senso orario visto da p0), di RAMO_CURVATURA
+// volte la lunghezza del segmento. Restituisce RAMO_CAMPIONI punti campionati lungo la curva.
+function campionaCurva(p0, p1) {
+  const dx = p1[0] - p0[0];
+  const dy = p1[1] - p0[1];
+  const lunghezza = Math.hypot(dx, dy) || 1;
+  const px = dy / lunghezza; // perpendicolare normalizzata, ruotata di -90°
+  const py = -dx / lunghezza;
+  const cx = (p0[0] + p1[0]) / 2 + px * lunghezza * RAMO_CURVATURA;
+  const cy = (p0[1] + p1[1]) / 2 + py * lunghezza * RAMO_CURVATURA;
+  const punti = [];
+  for (let i = 0; i < RAMO_CAMPIONI; i++) {
+    const t = i / (RAMO_CAMPIONI - 1);
+    const u = 1 - t;
+    punti.push([
+      u * u * p0[0] + 2 * u * t * cx + t * t * p1[0],
+      u * u * p0[1] + 2 * u * t * cy + t * t * p1[1],
+    ]);
+  }
+  return punti;
+}
+
 // Domicilio inventato, zona Monte Stella / QT8 — Municipio 8 di Milano.
 // Non corrisponde a un indirizzo reale: vedi la regola sui dati in CLAUDE.md.
 // Si può spostare scrivendo un indirizzo nella tendina sinistra.
 let DOMICILIO = { lat: 45.4809, lon: 9.1385 };
 
 window.startApp = async function () {
+  // Costanti della tendina a bisogni passate al CSS, così restano tutte in cima a questo file.
+  document.documentElement.style.setProperty("--tendina-durata", TENDINA_DURATA_MS + "ms");
+  document.documentElement.style.setProperty("--tendina-rientro", TENDINA_RIENTRO);
+  document.documentElement.style.setProperty("--tendina-colore-attiva", TENDINA_COLORE_INTESTAZIONE_ATTIVA);
+
   const mapEl = document.getElementById("map");
   const appEl = document.getElementById("app");
   const panelSx = document.getElementById("panel-sx");
@@ -100,6 +176,7 @@ window.startApp = async function () {
   );
   const bisognoById = Object.fromEntries(bisogni.map((b) => [b.id, b]));
   const enteById = Object.fromEntries(enti.map((e) => [e.id, e]));
+  const servizioById = Object.fromEntries(servizi.map((s) => [s.id, s]));
   const serviziPerSede = {};
   for (const s of servizi) (serviziPerSede[s.sede] ||= []).push(s);
 
@@ -114,6 +191,11 @@ window.startApp = async function () {
     gruppiMap.get(chiave).push(e);
   }
   const gruppiArray = Array.from(gruppiMap.values());
+
+  // id ente -> indice della feature "enti" che lo rappresenta (singolo o cluster): serve a trovare
+  // rapidamente il marker giusto quando un servizio porta a un altro ente (rami di equivalenza).
+  const featureIdPerEnte = {};
+  gruppiArray.forEach((gruppo, i) => { for (const e of gruppo) featureIdPerEnte[e.id] = i; });
 
   // Per ogni cluster, quanti enti per macrodominio: serve per disegnare la "torta" del marker.
   function conteggiDominio(gruppo) {
@@ -143,8 +225,17 @@ window.startApp = async function () {
             conta: 1,
             macro_dominio: gruppo[0].macro_dominio,
             icona: null,
-            // Icona di categoria: nota da subito, perché un marker singolo è sempre lo stesso ente.
+            // Icona di categoria e nome: noti da subito, un marker singolo è sempre lo stesso ente.
             icona_categoria: ICONA_PER_CATEGORIA[gruppo[0].categoria_origine] || null,
+            nome: gruppo[0].nome,
+            // Un marker singolo parte "normale": diventa true quando selezionato (vedi selezionaMarker).
+            // Serve per la distanza dell'etichetta, che non può dipendere dallo stato di selezione
+            // (quello si legge solo con feature-state, non utilizzabile per le proprietà di layout).
+            etichettaGrande: false,
+            // Idem per l'hover: la torta del cluster e il numero sono icone/testo (proprietà di
+            // layout), non cerchi — non possono reagire al feature-state, solo a un dato vero e
+            // proprio (vedi impostaInEvidenza, che lo tiene aggiornato a ogni passaggio del mouse).
+            hoverDato: false,
           },
         };
       }
@@ -155,12 +246,22 @@ window.startApp = async function () {
         type: "Feature",
         id: i,
         geometry: { type: "Point", coordinates: [gruppo[0].lon, gruppo[0].lat] },
-        // icona_categoria resta null finché non si sceglie un ente specifico dal popup del cluster
-        // (viene scritta allora, vedi selezionaMarker più sotto, perché il gruppo ne contiene più d'uno).
-        properties: { conta: gruppo.length, macro_dominio: null, icona, icona_categoria: null },
+        // icona_categoria e nome restano null finché non si sceglie un ente specifico dal popup del
+        // cluster (vengono scritti allora, vedi selezionaMarker più sotto: il gruppo ne ha più d'uno).
+        // Un cluster è sempre "grande" (vedi RAGGIO_GRANDE), anche a riposo.
+        properties: {
+          conta: gruppo.length, macro_dominio: null, icona, icona_categoria: null, nome: null,
+          etichettaGrande: true, hoverDato: false,
+        },
       };
     }),
   };
+
+  // Riferimento diretto a ogni Feature per id: permette di riordinare geojson.features (per portare
+  // un marker in primo piano, vedi portaInPrimoPiano) senza perdere la corrispondenza id → oggetto,
+  // che altrimenti servirebbe l'indice nell'array (geojson.features[id] non varrebbe più dopo un riordino).
+  const featureById = {};
+  geojson.features.forEach((f) => { featureById[f.id] = f; });
 
   // Disegna la "torta" di un cluster su un canvas: una fetta colorata per enti dello stesso
   // macrodominio, bordo bianco come gli altri marker. Il numero è un livello separato (enti-numero).
@@ -241,22 +342,93 @@ window.startApp = async function () {
   // ---------- mappa
   mapboxgl.accessToken = CONFIG.mapboxToken;
   const map = new mapboxgl.Map({
-    container: "map", style: CONFIG.mapStyle, center: CONFIG.center, zoom: CONFIG.zoom, language: "it",
+    container: "map", style: CONFIG.mapStyle, center: CONFIG.center, zoom: CONFIG.zoom,
+    minZoom: CONFIG.minZoom, maxZoom: CONFIG.maxZoom, language: "it",
   });
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
 
-  // Marker del domicilio: provvisorio, solo per distinguerlo dagli enti (icona definitiva da disegnare).
-  const domicilioMarker = new mapboxgl.Marker({
-    element: Object.assign(document.createElement("div"), { className: "domicilio-marker", title: "Domicilio" }),
-    anchor: "bottom",
-  }).setLngLat([DOMICILIO.lon, DOMICILIO.lat]).addTo(map);
+  // Indicatore leggero dello zoom corrente: un comando della mappa in più, così Mapbox lo mette da
+  // solo subito sotto i pulsanti +/- (stessa colonna, in alto a destra).
+  class ZoomIndicatoreControl {
+    onAdd(mappa) {
+      this._map = mappa;
+      this._el = document.createElement("div");
+      this._el.className = "mapboxgl-ctrl zoom-indicatore";
+      this._aggiorna = () => { this._el.textContent = "Zoom " + mappa.getZoom().toFixed(1); };
+      mappa.on("zoom", this._aggiorna);
+      this._aggiorna();
+      return this._el;
+    }
+    onRemove() {
+      this._map.off("zoom", this._aggiorna);
+      this._el.remove();
+    }
+  }
+  map.addControl(new ZoomIndicatoreControl(), "top-right");
 
-  let scelto = null; // id numerico della feature "enti-punti" attualmente selezionata
+  // Dati del marker del domicilio: un solo punto, aggiornato (vedi geocodifica più sotto) quando si
+  // scrive un nuovo indirizzo in tendina sinistra.
+  function datiDomicilio() {
+    return {
+      type: "FeatureCollection",
+      features: [{ type: "Feature", geometry: { type: "Point", coordinates: [DOMICILIO.lon, DOMICILIO.lat] }, properties: {} }],
+    };
+  }
+
+  let scelto = null; // id numerico della feature "enti" attualmente selezionata (ente o cluster aperto)
 
   map.on("load", async () => {
     map.addSource("enti", { type: "geojson", data: geojson });
+    map.addSource("rami", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     for (const [nome, conteggi] of torteDaGenerare) {
       if (!map.hasImage(nome)) map.addImage(nome, disegnaTorta(conteggi), { pixelRatio: PIXELRATIO_TORTA });
+    }
+
+    // Marker del domicilio: stessa impostazione di un marker "cliccato" (taglia RAGGIO_GRANDE, bordo
+    // bianco BORDO_GRANDE), ma senza stato a riposo — è sempre a quella taglia. Interno nero, con
+    // l'icona di domicilio.png sopra (267×267 fisici, caricata a pixelRatio 2 → 133,5 px logici).
+    map.addSource("domicilio", { type: "geojson", data: datiDomicilio() });
+    const raggioDomicilio = ["interpolate", ["linear"], ["zoom"], 10, RAGGIO_GRANDE[10], 14, RAGGIO_GRANDE[14]];
+    // Proporzionale al cerchio, come per gli altri marker (vedi OMBRA_FATTORE): altrimenti resta
+    // completamente coperta da lui e non si vede.
+    const raggioOmbraDomicilio = ["interpolate", ["linear"], ["zoom"],
+      10, RAGGIO_GRANDE[10] * OMBRA_FATTORE, 14, RAGGIO_GRANDE[14] * OMBRA_FATTORE];
+    map.addLayer({
+      id: "domicilio-ombra",
+      type: "circle",
+      source: "domicilio",
+      paint: { "circle-radius": raggioOmbraDomicilio, "circle-color": "#000000", "circle-blur": OMBRA_SFUMATURA, "circle-opacity": OMBRA_OPACITA },
+    });
+    map.addLayer({
+      id: "domicilio-cerchio",
+      type: "circle",
+      source: "domicilio",
+      paint: {
+        "circle-radius": raggioDomicilio,
+        "circle-color": "#000000",
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": BORDO_GRANDE,
+      },
+    });
+    try {
+      const immagineDomicilio = await caricaImmagine("icons/domicilio.png");
+      if (!map.hasImage("domicilio")) map.addImage("domicilio", immagineDomicilio, { pixelRatio: 2 });
+      const nativoDomicilio = immagineDomicilio.width / 2; // px logici a icon-size 1
+      map.addLayer({
+        id: "domicilio-icona",
+        type: "symbol",
+        source: "domicilio",
+        layout: {
+          "icon-image": "domicilio",
+          "icon-size": ["interpolate", ["linear"], ["zoom"],
+            10, (2 * RAGGIO_GRANDE[10] * SCALA_ICONA) / nativoDomicilio,
+            14, (2 * RAGGIO_GRANDE[14] * SCALA_ICONA) / nativoDomicilio],
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true,
+        },
+      });
+    } catch (err) {
+      console.warn(err.message);
     }
 
     // Taglia condivisa: un marker normale a riposo è la base; un cluster a riposo (conta > 1) e un
@@ -264,10 +436,50 @@ window.startApp = async function () {
     // proporzione a quanti enti raggruppa il cluster. Lo spazio in più sul selezionato ospita
     // l'icona di categoria dell'ente (vedi livello enti-icona più sotto).
     const grande = ["any", ["boolean", ["feature-state", "scelto"], false], [">", ["get", "conta"], 1]];
-    const raggio = ["interpolate", ["linear"], ["zoom"],
-      10, ["case", grande, RAGGIO_GRANDE[10], RAGGIO_NORMALE[10]],
-      14, ["case", grande, RAGGIO_GRANDE[14], RAGGIO_NORMALE[14]]];
+    // In hover (marker o cluster, vedi inEvidenzaMarker) la taglia cresce un po' in più, qualunque sia
+    // già la taglia di base (normale o grande): un rialzo relativo, non una taglia a parte. fattore
+    // moltiplica tutto (serve all'ombra, proporzionale al marker: vedi raggioOmbra). I valori sono
+    // precalcolati: non si può moltiplicare un'espressione di zoom "al volo", deve restare il livello
+    // più esterno, altrimenti Mapbox la rifiuta (è già successo: vedi cronologia del progetto).
+    function tagliaMarker(zoomId, fattore = 1) {
+      const normale = RAGGIO_NORMALE[zoomId] * fattore;
+      const estesa = RAGGIO_GRANDE[zoomId] * fattore;
+      return ["case",
+        ["boolean", ["feature-state", "inEvidenzaMarker"], false],
+        ["case", grande, estesa * FATTORE_HOVER_MARKER, normale * FATTORE_HOVER_MARKER],
+        grande, estesa,
+        normale];
+    }
+    const raggio = ["interpolate", ["linear"], ["zoom"], 10, tagliaMarker(10), 14, tagliaMarker(14)];
+    const raggioOmbra = ["interpolate", ["linear"], ["zoom"],
+      10, tagliaMarker(10, OMBRA_FATTORE), 14, tagliaMarker(14, OMBRA_FATTORE)];
+    // Distanza fissa fra il bordo del marker e l'etichetta (vedi ETICHETTA_MARGINE): calcolata sulla
+    // taglia "grande" o "normale" di base, letta dal dato (etichettaGrande), non dallo stato di
+    // selezione — una proprietà di layout come text-radial-offset non può dipendere da feature-state.
+    function offsetEtichetta(zoomId) {
+      const normale = (RAGGIO_NORMALE[zoomId] + ETICHETTA_MARGINE) / ETICHETTA_DIMENSIONE;
+      const estesa = (RAGGIO_GRANDE[zoomId] + ETICHETTA_MARGINE) / ETICHETTA_DIMENSIONE;
+      return ["case", ["get", "etichettaGrande"], estesa, normale];
+    }
+    const distanzaEtichetta = ["interpolate", ["linear"], ["zoom"],
+      10, offsetEtichetta(10), 14, offsetEtichetta(14)];
+    // Taglia della torta del cluster e dell'icona di categoria: anche queste leggono "hoverDato" (un
+    // dato, non uno stato) per crescere leggermente in hover, come fa il cerchio con tagliaMarker.
+    function scalaIcona(dimensioneNormale) {
+      return ["case", ["get", "hoverDato"], dimensioneNormale * FATTORE_HOVER_MARKER, dimensioneNormale];
+    }
     const opacitaAttenuabile = ["case", ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA, 1];
+    const transizioneAttenuazione = { duration: DISSOLVENZA_MS };
+    // Colore del macrodominio, oppure quello dell'ente scelto dentro un cluster: riusato sia dai
+    // marker sia dall'etichetta col nome, così sono sempre coerenti.
+    const coloreEnte = ["case",
+      ["all", [">", ["get", "conta"], 1], ["boolean", ["feature-state", "scelto"], false]],
+      ["feature-state", "coloreScelto"],
+      ["match", ["get", "macro_dominio"],
+        "sanitario", COLORI.sanitario,
+        "sociosanitario", COLORI.sociosanitario,
+        "sociale", COLORI.sociale,
+        "#888888"]];
 
     // Ombra leggera sotto ogni marker e cluster, per distinguerli dal piano della mappa.
     map.addLayer({
@@ -275,13 +487,49 @@ window.startApp = async function () {
       type: "circle",
       source: "enti",
       paint: {
-        "circle-radius": raggio,
+        "circle-radius": raggioOmbra,
         "circle-color": "#000000",
-        "circle-blur": 0.7,
-        "circle-translate": [1, 2],
-        "circle-opacity": ["case", ["boolean", ["feature-state", "attenuato"], false], 0.03, 0.22],
+        "circle-blur": OMBRA_SFUMATURA,
+        "circle-translate": OMBRA_SCARTO,
+        // Attenuato vince sempre: zero ombra, anche se in hover (si può comunque passarci sopra per
+        // leggerne il nome, ma resta "spento" come il resto del marker).
+        "circle-opacity": ["case",
+          ["boolean", ["feature-state", "attenuato"], false], 0,
+          ["boolean", ["feature-state", "inEvidenzaMarker"], false], OMBRA_OPACITA_HOVER,
+          OMBRA_OPACITA],
+        "circle-opacity-transition": transizioneAttenuazione,
       },
     });
+
+    // Rami di equivalenza: sotto tutti i livelli dei marker (vedi beforeId "enti-ombra").
+    // Fascia larga e trasparente, solo per intercettare meglio il passaggio del mouse.
+    map.addLayer({
+      id: "rami-hitbox",
+      type: "line",
+      source: "rami",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: { "line-width": RAMO_FASCIA_HOVER, "line-opacity": 0 },
+    }, "enti-ombra");
+
+    // Il ramo vero e proprio: sottile, estremità arrotondate, nessuna freccia (l'equivalenza non ha
+    // direzione). "comparso" parte falso e passa a vero un istante dopo aver ricevuto i dati, così
+    // la comparsa si vede come una dissolvenza e non uno scatto (vedi mostraRami più sotto).
+    map.addLayer({
+      id: "rami",
+      type: "line",
+      source: "rami",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["case", ["boolean", ["feature-state", "inEvidenza"], false], RAMO_COLORE_HOVER, RAMO_COLORE_RIPOSO],
+        "line-width": ["case", ["boolean", ["feature-state", "inEvidenza"], false], RAMO_SPESSORE_HOVER, RAMO_SPESSORE],
+        "line-opacity": ["case",
+          ["!", ["boolean", ["feature-state", "comparso"], false]], 0,
+          ["boolean", ["feature-state", "inEvidenza"], false], RAMO_OPACITA_HOVER,
+          ["boolean", ["feature-state", "spento"], false], RAMO_OPACITA_SPENTO,
+          RAMO_OPACITA],
+        "line-opacity-transition": transizioneAttenuazione,
+      },
+    }, "enti-ombra");
 
     // Marker singoli: un ente per punto, colorato per macrodominio.
     map.addLayer({
@@ -291,15 +539,13 @@ window.startApp = async function () {
       filter: ["==", ["get", "conta"], 1],
       paint: {
         "circle-radius": raggio,
-        "circle-color": ["match", ["get", "macro_dominio"],
-          "sanitario", COLORI.sanitario,
-          "sociosanitario", COLORI.sociosanitario,
-          "sociale", COLORI.sociale,
-          "#888888"],
+        "circle-color": coloreEnte,
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], BORDO_GRANDE, BORDO_NORMALE],
         "circle-opacity": opacitaAttenuabile,
         "circle-stroke-opacity": opacitaAttenuabile,
+        "circle-opacity-transition": transizioneAttenuazione,
+        "circle-stroke-opacity-transition": transizioneAttenuazione,
       },
     });
 
@@ -315,10 +561,13 @@ window.startApp = async function () {
       layout: {
         "icon-image": ["get", "icona"],
         "icon-size": ["interpolate", ["linear"], ["zoom"],
-          10, RAGGIO_GRANDE[10] / 32,
-          14, RAGGIO_GRANDE[14] / 32],
+          10, scalaIcona(RAGGIO_GRANDE[10] / 32),
+          14, scalaIcona(RAGGIO_GRANDE[14] / 32)],
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        // L'ordine dei dati decide chi sta sopra: "auto" userebbe la posizione in verticale sullo
+        // schermo, vanificando portaInPrimoPiano quando si è in hover (vedi più sotto).
+        "symbol-z-order": "source",
       },
       paint: {
         // Si nasconde quando un ente del gruppo è scelto: prende il suo posto il marker a tinta piena.
@@ -326,6 +575,7 @@ window.startApp = async function () {
           ["boolean", ["feature-state", "scelto"], false], 0,
           ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA,
           1],
+        "icon-opacity-transition": transizioneAttenuazione,
       },
     });
 
@@ -353,10 +603,11 @@ window.startApp = async function () {
       filter: [">", ["get", "conta"], 1],
       layout: {
         "text-field": ["to-string", ["get", "conta"]],
-        "text-size": 11,
+        "text-size": scalaIcona(11),
         "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
         "text-allow-overlap": true,
         "text-ignore-placement": true,
+        "symbol-z-order": "source",
       },
       paint: {
         "text-color": "#ffffff",
@@ -366,6 +617,7 @@ window.startApp = async function () {
           ["boolean", ["feature-state", "scelto"], false], 0,
           ["boolean", ["feature-state", "attenuato"], false], OPACITA_ATTENUATA,
           1],
+        "text-opacity-transition": transizioneAttenuazione,
       },
     });
 
@@ -393,28 +645,363 @@ window.startApp = async function () {
       layout: {
         "icon-image": ["get", "icona_categoria"],
         "icon-size": ["interpolate", ["linear"], ["zoom"],
-          10, (2 * RAGGIO_GRANDE[10] * SCALA_ICONA) / 128,
-          14, (2 * RAGGIO_GRANDE[14] * SCALA_ICONA) / 128],
+          10, scalaIcona((2 * RAGGIO_GRANDE[10] * SCALA_ICONA) / 128),
+          14, scalaIcona((2 * RAGGIO_GRANDE[14] * SCALA_ICONA) / 128)],
         "icon-allow-overlap": true,
         "icon-ignore-placement": true,
+        "symbol-z-order": "source",
       },
       paint: {
         "icon-opacity": ["case", ["boolean", ["feature-state", "scelto"], false], 1, 0],
       },
     });
 
+    // Etichetta col nome dell'ente: senza contenitore, colorata come il marker, bordo bianco per
+    // restare leggibile. Visibile al hover di un marker singolo, da fermo se è "scelto", oppure se è
+    // il marker collegato da un ramo in evidenza (vedi evidenziaRamo più sotto). Mai per i cluster a
+    // riposo: "nome" resta null finché non si sceglie un ente specifico (vedi geojson e selezionaMarker).
+    map.addLayer({
+      id: "enti-etichetta",
+      type: "symbol",
+      source: "enti",
+      layout: {
+        "text-field": ["get", "nome"],
+        "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+        "text-size": ETICHETTA_DIMENSIONE,
+        // "top" vuol dire: il lato alto del testo tocca il punto, quindi il testo scende sotto di
+        // esso. "bottom" (come avevo scritto prima per errore) fa l'opposto: appare sopra.
+        "text-anchor": "top",
+        "text-radial-offset": distanzaEtichetta,
+        // Sempre visibile, a ogni zoom: ignora le collisioni con le altre scritte della mappa (vie,
+        // quartieri...). In cambio non si sposta più da sola per evitarle — è sempre "sotto" il marker.
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+        "symbol-z-order": "source",
+      },
+      paint: {
+        "text-color": coloreEnte,
+        "text-halo-color": ETICHETTA_BORDO_COLORE,
+        "text-halo-width": ETICHETTA_BORDO_SPESSORE,
+        "text-opacity": ["case",
+          ["boolean", ["feature-state", "scelto"], false], 1,
+          ["boolean", ["feature-state", "inEvidenzaMarker"], false], 1,
+          0],
+        "text-opacity-transition": transizioneAttenuazione,
+      },
+    });
+
+    // Il ramo sotto il cursore: una copia, sopra a tutti i marker. Stessa sorgente del ramo "normale"
+    // (sotto ai marker, che resta dov'è) e stesso feature-state "inEvidenza": nessuna scrittura dati
+    // a parte, quindi compare/sparisce nello stesso istante del resto — niente più sfarfallio dovuto
+    // a due aggiornamenti leggermente sfasati (era così quando aveva una sorgente propria).
+    map.addLayer({
+      id: "rami-evidenza",
+      type: "line",
+      source: "rami",
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": RAMO_COLORE_HOVER,
+        "line-width": RAMO_SPESSORE_HOVER,
+        "line-opacity": ["case", ["boolean", ["feature-state", "inEvidenza"], false], RAMO_OPACITA_HOVER, 0],
+      },
+    });
+
+    // I due capi del ramo in evidenza, ridisegnati sopra di lui: senza, il ramo li coprirebbe. Stessa
+    // taglia e colore dei marker veri (raggio/coloreEnte), che restano sotto, invariati. Nessun
+    // filtro sul dato: la visibilità legge il feature-state "capoRamo" (impostato insieme a
+    // "inEvidenza" sui rami, vedi evidenziaRamo), così compaiono nello stesso istante del ramo sopra
+    // — un filtro basato su una proprietà avrebbe richiesto una riscrittura dei dati più lenta, non
+    // sincronizzata con il ramo, ed era quello a causare lo sfarfallio.
+    map.addLayer({
+      id: "enti-capo-ramo",
+      type: "circle",
+      source: "enti",
+      paint: {
+        "circle-radius": raggio,
+        "circle-color": coloreEnte,
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": ["case", ["boolean", ["feature-state", "scelto"], false], BORDO_GRANDE, BORDO_NORMALE],
+        "circle-opacity": ["case", ["boolean", ["feature-state", "capoRamo"], false], 1, 0],
+        "circle-stroke-opacity": ["case", ["boolean", ["feature-state", "capoRamo"], false], 1, 0],
+      },
+    });
+
+    // Stesso motivo del cerchio sopra: anche l'icona di categoria (visibile solo se il capo è
+    // "scelto", cioè l'origine) andrebbe coperta dal ramo in evidenza. Stessa ricetta di enti-icona.
+    map.addLayer({
+      id: "enti-capo-ramo-icona",
+      type: "symbol",
+      source: "enti",
+      layout: {
+        "icon-image": ["get", "icona_categoria"],
+        "icon-size": ["interpolate", ["linear"], ["zoom"],
+          10, scalaIcona((2 * RAGGIO_GRANDE[10] * SCALA_ICONA) / 128),
+          14, scalaIcona((2 * RAGGIO_GRANDE[14] * SCALA_ICONA) / 128)],
+        "icon-allow-overlap": true,
+        "icon-ignore-placement": true,
+      },
+      paint: {
+        "icon-opacity": ["case",
+          ["all", ["boolean", ["feature-state", "capoRamo"], false], ["boolean", ["feature-state", "scelto"], false]], 1,
+          0],
+      },
+    });
+
+    // E per la stessa ragione l'etichetta col nome (qui sempre visibile, essendo un capo del ramo:
+    // l'origine è "scelta", il marker collegato è "in evidenza" per via di evidenziaRamo).
+    map.addLayer({
+      id: "enti-capo-ramo-etichetta",
+      type: "symbol",
+      source: "enti",
+      layout: {
+        "text-field": ["get", "nome"],
+        "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+        "text-size": ETICHETTA_DIMENSIONE,
+        "text-anchor": "top",
+        "text-radial-offset": distanzaEtichetta,
+        "text-allow-overlap": true,
+        "text-ignore-placement": true,
+      },
+      paint: {
+        "text-color": coloreEnte,
+        "text-halo-color": ETICHETTA_BORDO_COLORE,
+        "text-halo-width": ETICHETTA_BORDO_SPESSORE,
+        "text-opacity": ["case",
+          ["all",
+            ["boolean", ["feature-state", "capoRamo"], false],
+            ["any", ["boolean", ["feature-state", "scelto"], false], ["boolean", ["feature-state", "inEvidenzaMarker"], false]]],
+          1, 0],
+      },
+    });
+
     const LAYER_ENTI = ["enti-punti", "enti-cluster-torta", "enti-cluster-scelto"];
 
+    // Porta un marker in cima all'ordine di disegno, cioè in fondo all'array (per questo serve
+    // featureById: dopo un riordino l'indice nell'array non coincide più con l'id). Non scrive sulla
+    // mappa da sola: lo fa chi la chiama, insieme a eventuali altre proprietà cambiate nello stesso
+    // momento (vedi impostaInEvidenza e selezionaMarker). Via via che si passa sopra ai marker, chi è
+    // stato toccato per ultimo resta il più in vista — non c'è bisogno di riportare indietro gli altri.
+    function portaInPrimoPiano(featureId) {
+      const f = featureById[featureId];
+      if (!f) return;
+      const indice = geojson.features.indexOf(f);
+      if (indice !== -1 && indice !== geojson.features.length - 1) {
+        geojson.features.splice(indice, 1);
+        geojson.features.push(f);
+      }
+    }
+
+    // Accende/spegne l'hover di un marker o cluster. Il cerchio e la sua ombra reagiscono da soli
+    // via feature-state (vedi tagliaMarker); la torta del cluster, il suo numero e l'icona di
+    // categoria no (sono icone/testo, non cerchi): per loro serve "hoverDato", un dato vero scritto
+    // qui e riletto da scalaIcona.
+    function impostaInEvidenza(featureId, attivo) {
+      map.setFeatureState({ source: "enti", id: featureId }, { inEvidenzaMarker: attivo });
+      const f = featureById[featureId];
+      if (f) f.properties.hoverDato = attivo;
+      if (attivo) portaInPrimoPiano(featureId);
+      map.getSource("enti").setData(geojson);
+    }
+
+    // ---------- ventaglio e percorso: stato condiviso
+    // Un bisogno alla volta sulla mappa (ventaglio) oppure un servizio alla volta (percorso): i due
+    // stati non coesistono, quindi condividono la stessa logica di attenuazione. Riusa sempre
+    // OPACITA_ATTENUATA per i marker, mai un valore nuovo.
+    let bisognoSelezionato = null;
+    let servizioSelezionatoId = null;
+    let sediConRamo = null; // Set di id ente collegati da un ramo, quando un servizio è selezionato
+    let destinazioniPerIndice = []; // indice ramo -> { sedeId, servizio, coord, featureId }
+    let ramoInEvidenza = null; // indice del ramo sotto il cursore (o del cui marker si è in hover)
+    let markerInEvidenza = null; // feature id del marker singolo sotto il cursore, fuori dal percorso
+
+    function aggiornaAttenuazione() {
+      if (sediConRamo) {
+        // Percorso: restano accesi solo il marker di partenza e quelli raggiunti da un ramo.
+        gruppiArray.forEach((gruppo, i) => {
+          const haRamo = i === scelto || gruppo.some((e) => sediConRamo.has(e.id));
+          map.setFeatureState({ source: "enti", id: i }, { attenuato: !haRamo });
+        });
+      } else {
+        // Ventaglio: restano accesi i marker con almeno un servizio pertinente al bisogno scelto.
+        const pertinenti = bisognoSelezionato ? (sediPerBisogno[bisognoSelezionato] || new Set()) : null;
+        gruppiArray.forEach((gruppo, i) => {
+          const attenuato = pertinenti ? !gruppo.some((e) => pertinenti.has(e.id)) : false;
+          map.setFeatureState({ source: "enti", id: i }, { attenuato });
+        });
+      }
+    }
+
+    // ---------- percorso: rami di equivalenza fra il servizio scelto e i suoi equivalenti
+    let ramiCorrenti = { type: "FeatureCollection", features: [] };
+    let timeoutRamiUscita = null;
+
+    function mostraRami(coordOrigine, coordDestinazioni) {
+      if (timeoutRamiUscita) { clearTimeout(timeoutRamiUscita); timeoutRamiUscita = null; }
+      ramiCorrenti = {
+        type: "FeatureCollection",
+        features: coordDestinazioni.map((coord, i) => ({
+          type: "Feature",
+          id: i,
+          geometry: { type: "LineString", coordinates: campionaCurva(coordOrigine, coord) },
+          properties: {},
+        })),
+      };
+      map.removeFeatureState({ source: "rami" }); // niente stato residuo di una selezione precedente
+      map.getSource("rami").setData(ramiCorrenti);
+      // "comparso" parte falso (quindi opacità 0): lo si alza un istante dopo, così la comparsa è
+      // una dissolvenza (vedi "line-opacity-transition" sul livello "rami") e non uno scatto.
+      requestAnimationFrame(() => {
+        ramiCorrenti.features.forEach((f) => map.setFeatureState({ source: "rami", id: f.id }, { comparso: true }));
+      });
+    }
+
+    function nascondiRami() {
+      if (!ramiCorrenti.features.length) return;
+      ramiCorrenti.features.forEach((f) => map.setFeatureState({ source: "rami", id: f.id }, { comparso: false }));
+      if (timeoutRamiUscita) clearTimeout(timeoutRamiUscita);
+      timeoutRamiUscita = setTimeout(() => {
+        ramiCorrenti = { type: "FeatureCollection", features: [] };
+        map.getSource("rami").setData(ramiCorrenti);
+        timeoutRamiUscita = null;
+      }, DISSOLVENZA_MS);
+    }
+
+    // Fumetti di stato: solo testo, nessun pulsante di chiusura.
+    // - popupServizio: il servizio scelto in tendina destra, fisso finché resta selezionato.
+    // - popupServizioCollegato: il servizio equivalente all'altro capo del ramo in evidenza, sopra
+    //   al marker collegato; appare e sparisce con l'hover sul ramo (o sul marker collegato stesso).
+    const popupServizio = new mapboxgl.Popup({
+      closeButton: false, closeOnClick: false, focusAfterOpen: false,
+      anchor: "bottom-left", offset: 14, className: "popup-servizio",
+    });
+    const popupServizioCollegato = new mapboxgl.Popup({
+      closeButton: false, closeOnClick: false, focusAfterOpen: false,
+      anchor: "bottom", offset: 14, className: "popup-servizio",
+    });
+
+    // Hover su un ramo o sul marker che collega: il ramo passa in primo piano (più scuro, più
+    // spesso), tutti gli altri rami si attenuano ulteriormente per non affollare la lettura delle
+    // etichette; sotto il marker collegato compare il suo nome, sopra il servizio che lo collega.
+    function evidenziaRamo(indice) {
+      if (indice < 0 || indice >= destinazioniPerIndice.length) return;
+      ramoInEvidenza = indice;
+      const dest = destinazioniPerIndice[indice];
+      ramiCorrenti.features.forEach((f) => {
+        map.setFeatureState({ source: "rami", id: f.id }, { inEvidenza: f.id === indice, spento: f.id !== indice });
+      });
+      // "rami-evidenza" legge lo stesso "inEvidenza" appena impostato sopra: compare da sé, nello
+      // stesso istante. I due capi (origine e marker collegato) si ridisegnano sopra di lui — anche
+      // loro via feature-state ("capoRamo"), non riscrivendo i dati: altrimenti arriverebbero a
+      // schermo un istante dopo il ramo, con lo sfarfallio che si vedeva prima.
+      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { capoRamo: true });
+      map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: true });
+      impostaInEvidenza(dest.featureId, true);
+      popupServizioCollegato.setLngLat(dest.coord).setHTML(`<strong>${dest.servizio.titolo || "Servizio"}</strong>`).addTo(map);
+    }
+
+    function spegniEvidenziaRamo() {
+      if (ramoInEvidenza === null) return;
+      const dest = destinazioniPerIndice[ramoInEvidenza];
+      ramiCorrenti.features.forEach((f) => map.setFeatureState({ source: "rami", id: f.id }, { inEvidenza: false, spento: false }));
+      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { capoRamo: false });
+      if (dest) {
+        map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: false });
+        impostaInEvidenza(dest.featureId, false);
+      }
+      popupServizioCollegato.remove();
+      ramoInEvidenza = null;
+    }
+
+    map.on("mousemove", "rami-hitbox", (ev) => {
+      const id = ev.features[0].id;
+      if (ramoInEvidenza === id) return;
+      spegniEvidenziaRamo();
+      evidenziaRamo(id);
+      map.getCanvas().style.cursor = "pointer";
+    });
+    map.on("mouseleave", "rami-hitbox", () => {
+      spegniEvidenziaRamo();
+      map.getCanvas().style.cursor = "";
+    });
+
+    // Equivalenza funzionale (unico tipo di legame per ora): altri servizi che rispondono allo
+    // stesso bisogno già attivo e che si trovano presso un ente della stessa categoria semplificata.
+    function trovaEquivalenti(servizio, bisognoContesto) {
+      const enteOrigine = enteById[servizio.sede];
+      const perSede = new Map(); // id ente -> un servizio equivalente trovato lì (il primo)
+      for (const altro of servizi) {
+        if (altro.id === servizio.id || altro.sede === servizio.sede) continue;
+        if (altro.risposta !== "R" || !altro.bisogni.includes(bisognoContesto)) continue;
+        const enteAltro = enteById[altro.sede];
+        if (!enteOrigine || !enteAltro || enteAltro.categoria !== enteOrigine.categoria) continue;
+        if (!perSede.has(altro.sede)) perSede.set(altro.sede, altro);
+      }
+      return perSede;
+    }
+
+    function selezionaServizio(servizio) {
+      // Senza un bisogno attivo in tendina sinistra, si usa il primo bisogno del servizio stesso:
+      // il clic su un marker funziona anche fuori dal ventaglio, quindi serve comunque un contesto.
+      const bisognoContesto = bisognoSelezionato || servizio.bisogni[0];
+      if (!bisognoContesto) return;
+
+      const equivalenti = trovaEquivalenti(servizio, bisognoContesto);
+      const origine = gruppiArray[featureIdPerEnte[servizio.sede]];
+      if (!origine) return;
+      const coordOrigine = [origine[0].lon, origine[0].lat];
+
+      sediConRamo = new Set();
+      destinazioniPerIndice = [];
+      for (const [sedeId, servizioAltro] of equivalenti) {
+        const gruppoDest = gruppiArray[featureIdPerEnte[sedeId]];
+        if (!gruppoDest) continue;
+        sediConRamo.add(sedeId);
+        destinazioniPerIndice.push({
+          sedeId, servizio: servizioAltro, featureId: featureIdPerEnte[sedeId],
+          coord: [gruppoDest[0].lon, gruppoDest[0].lat],
+        });
+      }
+
+      servizioSelezionatoId = servizio.id;
+      mostraRami(coordOrigine, destinazioniPerIndice.map((d) => d.coord));
+      popupServizio.setLngLat(coordOrigine).setHTML(`<strong>${servizio.titolo || "Servizio"}</strong>`).addTo(map);
+      aggiornaAttenuazione();
+
+      // Un servizio sotto più bisogni compare più volte: tutte le sue occorrenze vanno selezionate.
+      panelDxContent.querySelectorAll(".servizio-btn").forEach((b) => b.classList.toggle("selezionato", b.dataset.id === servizio.id));
+    }
+
+    function deselezionaServizio() {
+      if (servizioSelezionatoId === null) return;
+      servizioSelezionatoId = null;
+      // Spegne l'evidenza del ramo (se attiva) finché destinazioniPerIndice è ancora valido: lì
+      // dentro si legge per sapere quale marker riportare alla normalità (vedi spegniEvidenziaRamo).
+      spegniEvidenziaRamo();
+      sediConRamo = null;
+      destinazioniPerIndice = [];
+      nascondiRami();
+      popupServizio.remove();
+      aggiornaAttenuazione();
+      panelDxContent.querySelectorAll(".servizio-btn").forEach((b) => b.classList.remove("selezionato"));
+    }
+
     function selezionaMarker(featureId, ente) {
-      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
+      if (scelto !== null) {
+        map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
+        // Un marker singolo torna "normale" (un cluster resta sempre grande, vedi geojson iniziale).
+        if (gruppiArray[scelto].length === 1) featureById[scelto].properties.etichettaGrande = false;
+      }
       scelto = featureId;
       map.setFeatureState({ source: "enti", id: scelto }, { scelto: true, coloreScelto: COLORI[ente.macro_dominio] || COLORE_CLUSTER });
+      featureById[featureId].properties.etichettaGrande = true;
       if (gruppiArray[featureId].length > 1) {
-        // L'icona di un marker singolo è già nei dati (icona_categoria): qui invece va scritta,
-        // perché il cluster raggruppa enti di categorie diverse e cambia a ogni scelta.
-        geojson.features[featureId].properties.icona_categoria = ICONA_PER_CATEGORIA[ente.categoria_origine] || null;
-        map.getSource("enti").setData(geojson);
+        // Icona e nome di un marker singolo sono già nei dati: qui invece vanno scritti, perché il
+        // cluster raggruppa enti diversi e cambia a ogni scelta.
+        featureById[featureId].properties.icona_categoria = ICONA_PER_CATEGORIA[ente.categoria_origine] || null;
+        featureById[featureId].properties.nome = ente.nome;
       }
+      portaInPrimoPiano(featureId);
+      map.getSource("enti").setData(geojson);
       mostraEnte(ente.id);
     }
 
@@ -441,6 +1028,10 @@ window.startApp = async function () {
       popupScelta.setLngLat(f.geometry.coordinates).setDOMContent(el).addTo(map);
     }
 
+    // Fumetto al passaggio del mouse sui cluster (più di un ente sullo stesso punto): resta un
+    // riquadro, perché elenca più nomi. Un marker singolo invece usa l'etichetta colorata (sopra).
+    const popupCluster = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 10 });
+
     map.on("click", LAYER_ENTI, (ev) => {
       const f = ev.features[0];
       const gruppo = gruppiArray[f.id];
@@ -448,72 +1039,161 @@ window.startApp = async function () {
       else apriSceltaEnte(f, gruppo);
     });
     map.on("mouseenter", LAYER_ENTI, () => (map.getCanvas().style.cursor = "pointer"));
-    map.on("mouseleave", LAYER_ENTI, () => (map.getCanvas().style.cursor = ""));
+    map.on("mouseleave", LAYER_ENTI, () => {
+      map.getCanvas().style.cursor = "";
+      popupCluster.remove();
+      spegniEvidenziaRamo();
+      if (markerInEvidenza !== null) {
+        impostaInEvidenza(markerInEvidenza, false);
+        markerInEvidenza = null;
+      }
+    });
 
-    // Fumetto al passaggio del mouse: nome dell'ente (o degli enti, se più di uno sullo stesso punto).
-    const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 10 });
     map.on("mousemove", LAYER_ENTI, (ev) => {
       const f = ev.features[0];
       const gruppo = gruppiArray[f.id];
-      const html = gruppo.length === 1
-        ? `<strong>${gruppo[0].nome}</strong>`
-        : `<strong>${gruppo.length} enti in questo edificio</strong><br>${gruppo.map((e) => e.nome).join("<br>")}`;
-      popup.setLngLat(f.geometry.coordinates).setHTML(html).addTo(map);
+
+      // Il marker (o cluster) sotto il cursore si evidenzia sempre — taglia, ombra e primo piano
+      // reagiscono da sole (vedi impostaInEvidenza/tagliaMarker), per qualunque tipo di marker.
+      if (markerInEvidenza !== f.id) {
+        if (markerInEvidenza !== null) impostaInEvidenza(markerInEvidenza, false);
+        markerInEvidenza = f.id;
+        impostaInEvidenza(f.id, true);
+      }
+
+      if (gruppo.length > 1) {
+        spegniEvidenziaRamo();
+        popupCluster.setLngLat(f.geometry.coordinates)
+          .setHTML(`<strong>${gruppo.length} enti in questo edificio</strong><br>${gruppo.map((e) => e.nome).join("<br>")}`)
+          .addTo(map);
+        return;
+      }
+
+      popupCluster.remove();
+      const enteId = gruppo[0].id;
+      if (sediConRamo && sediConRamo.has(enteId)) {
+        // Marker collegato dal percorso in corso: stesso effetto dell'hover sul suo ramo.
+        const indice = destinazioniPerIndice.findIndex((d) => d.sedeId === enteId);
+        if (ramoInEvidenza !== indice) { spegniEvidenziaRamo(); evidenziaRamo(indice); }
+      }
     });
-    map.on("mouseleave", LAYER_ENTI, () => popup.remove());
 
     // ---------- ventaglio: clic su un bisogno nella tendina sinistra
-    // Un bisogno alla volta: i marker pertinenti restano come sono, gli altri si attenuano (non spariscono).
-    let bisognoSelezionato = null;
     const bottoniBisogno = document.querySelectorAll(".bisogno-btn");
 
     function selezionaBisogno(id) {
+      deselezionaServizio(); // un bisogno diverso rende non più valido il percorso in corso
       bisognoSelezionato = bisognoSelezionato === id ? null : id;
-      const pertinenti = bisognoSelezionato ? (sediPerBisogno[bisognoSelezionato] || new Set()) : null;
-      gruppiArray.forEach((gruppo, i) => {
-        // Basta un ente pertinente nel gruppo per tenere acceso il marker che li rappresenta tutti.
-        const attenuato = pertinenti ? !gruppo.some((e) => pertinenti.has(e.id)) : false;
-        map.setFeatureState({ source: "enti", id: i }, { attenuato });
-      });
+      aggiornaAttenuazione();
       bottoniBisogno.forEach((btn) => btn.classList.toggle("attivo", btn.dataset.id === bisognoSelezionato));
     }
 
     bottoniBisogno.forEach((btn) => btn.addEventListener("click", () => selezionaBisogno(btn.dataset.id)));
-  });
 
-  // ---------- tendina destra: servizi presso l'ente (si apre solo con un marker selezionato)
-  function nomePromotore(p) {
-    if (!p) return null;
-    return enteById[p] ? enteById[p].nome : p;
-  }
-  function mostraEnte(id) {
-    const e = enteById[id];
-    const lista = serviziPerSede[id] || [];
-    const righe = lista.map((s) => {
-      const bis = s.bisogni.map((b) => (bisognoById[b] ? bisognoById[b].nome : b)).join(", ");
-      const extra = [
-        s.risposta === "O" ? "orienta" : "risponde",
-        s.a_domicilio ? "a domicilio" : null,
-        s.ente !== id ? "di " + (enteById[s.ente] ? enteById[s.ente].nome : s.ente) : null,
-        s.promotore ? "promosso da " + nomePromotore(s.promotore) : null,
-      ].filter(Boolean).join(" · ");
-      return `<li><b>${s.titolo || "Servizio"}</b><br><span class="meta">${extra}</span><br><span class="bis">${bis}</span></li>`;
-    }).join("");
-    panelDxContent.innerHTML = `
-      <p class="eyebrow">${e.categoria || ""}</p>
-      <h2>${e.nome}</h2>
-      <p class="meta">${e.indirizzo || ""}</p>
-      <p class="eyebrow">${lista.length} servizi</p>
-      <ul class="servizi">${righe}</ul>`;
-    appEl.classList.remove("dx-closed");
-  }
-
-  panelDxClose.addEventListener("click", () => {
-    appEl.classList.add("dx-closed");
-    if (scelto !== null) {
-      map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
-      scelto = null;
+    // ---------- tendina destra: bisogni a tendina sopra i servizi dell'ente
+    function nomePromotore(p) {
+      if (!p) return null;
+      return enteById[p] ? enteById[p].nome : p;
     }
+
+    // Raggruppa i servizi di un ente per bisogno: prima i bisogni della cartella (nell'ordine della
+    // tendina sinistra), poi gli altri bisogni a cui l'ente risponde, nell'ordine del CANE. Un
+    // servizio con più bisogni compare in più gruppi (vedi anche selezionaServizio/deselezionaServizio,
+    // che selezionano tutte le occorrenze insieme).
+    function bisogniEnte(id) {
+      const lista = serviziPerSede[id] || [];
+      const presenti = new Set();
+      for (const s of lista) for (const b of s.bisogni) presenti.add(b);
+      const ordineId = [
+        ...BISOGNI_CARTELLA.filter((b) => presenti.has(b)),
+        ...bisogni.filter((b) => presenti.has(b.id) && !BISOGNI_CARTELLA.includes(b.id)).map((b) => b.id),
+      ];
+      return ordineId.map((bid) => ({
+        bisogno: bisognoById[bid],
+        servizi: lista.filter((s) => s.bisogni.includes(bid)),
+      }));
+    }
+
+    function mostraEnte(id) {
+      deselezionaServizio(); // si cambia ente: il percorso precedente non ha più senso
+      const e = enteById[id];
+      const gruppi = bisogniEnte(id);
+
+      // Caso B: se in tendina sinistra c'è un bisogno selezionato e l'ente vi risponde, va per primo,
+      // già aperto, con lo stesso trattamento grafico che ha a sinistra (.attivo).
+      if (bisognoSelezionato) {
+        const indice = gruppi.findIndex((g) => g.bisogno.id === bisognoSelezionato);
+        if (indice > 0) gruppi.unshift(gruppi.splice(indice, 1)[0]);
+      }
+
+      const blocchi = gruppi.map((g) => {
+        const evidenziato = g.bisogno.id === bisognoSelezionato;
+        const righe = g.servizi.map((s) => {
+          const bis = s.bisogni.map((b) => (bisognoById[b] ? bisognoById[b].nome : b)).join(", ");
+          const extra = [
+            s.risposta === "O" ? "orienta" : "risponde",
+            s.a_domicilio ? "a domicilio" : null,
+            s.ente !== id ? "di " + (enteById[s.ente] ? enteById[s.ente].nome : s.ente) : null,
+            s.promotore ? "promosso da " + nomePromotore(s.promotore) : null,
+          ].filter(Boolean).join(" · ");
+          return `<li>
+            <button type="button" class="servizio-btn" data-id="${s.id}">
+              <b>${s.titolo || "Servizio"}</b><br><span class="meta">${extra}</span><br><span class="bis">${bis}</span>
+            </button>
+          </li>`;
+        }).join("");
+        return `
+          <div class="bisogno-gruppo${evidenziato ? " attivo" : ""}" data-bisogno="${g.bisogno.id}">
+            <button type="button" class="bisogno-intestazione" aria-expanded="${evidenziato}">
+              <span class="bisogno-intestazione__nome">${g.bisogno.nome}</span>
+              <span class="bisogno-intestazione__conta">(${g.servizi.length})</span>
+              <span class="bisogno-intestazione__freccia">▾</span>
+            </button>
+            <div class="bisogno-corpo${evidenziato ? " aperto" : ""}">
+              <ul class="servizi">${righe}</ul>
+            </div>
+          </div>`;
+      }).join("");
+
+      panelDxContent.innerHTML = `
+        <p class="eyebrow">${e.categoria || ""}</p>
+        <h2>${e.nome}</h2>
+        <p class="meta">${e.indirizzo || ""}</p>
+        ${blocchi || '<p class="nota">Nessun servizio registrato per questo ente.</p>'}`;
+      appEl.classList.remove("dx-closed");
+
+      // Intestazioni indipendenti: aprirne una non chiude le altre.
+      panelDxContent.querySelectorAll(".bisogno-intestazione").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const corpo = btn.nextElementSibling;
+          const apri = !corpo.classList.contains("aperto");
+          corpo.classList.toggle("aperto", apri);
+          btn.setAttribute("aria-expanded", String(apri));
+        });
+      });
+
+      // Servizi cliccabili: un solo selezionato alla volta. Il clic sul già selezionato lo deseleziona.
+      panelDxContent.querySelectorAll(".servizio-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const servizio = servizioById[btn.dataset.id];
+          if (servizioSelezionatoId === servizio.id) deselezionaServizio();
+          else selezionaServizio(servizio);
+        });
+      });
+    }
+
+    panelDxClose.addEventListener("click", () => {
+      deselezionaServizio();
+      appEl.classList.add("dx-closed");
+      if (scelto !== null) {
+        map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
+        if (gruppiArray[scelto].length === 1) {
+          featureById[scelto].properties.etichettaGrande = false;
+          map.getSource("enti").setData(geojson);
+        }
+        scelto = null;
+      }
+    });
   });
 
   // ---------- domicilio: spostarlo scrivendo un indirizzo
@@ -551,7 +1231,8 @@ window.startApp = async function () {
     }
     const [lon, lat] = trovato.center;
     DOMICILIO = { lat, lon };
-    domicilioMarker.setLngLat([lon, lat]);
+    const sorgenteDomicilio = map.getSource("domicilio");
+    if (sorgenteDomicilio) sorgenteDomicilio.setData(datiDomicilio());
     map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 14) });
     statoDomicilio.textContent = "Domicilio impostato: " + trovato.place_name;
   });

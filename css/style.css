@@ -34,6 +34,17 @@ html, body {
 .stage { position: relative; }
 #map { position: absolute; inset: 0; }
 
+/* Indicatore leggero dello zoom corrente: un comando della mappa, subito sotto i pulsanti +/- */
+.zoom-indicatore {
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--ink-2);
+  background: rgba(255, 255, 255, .9);
+  border-radius: 3px;
+  text-align: center;
+  pointer-events: none;
+}
+
 .panel {
   background: var(--panel);
   padding: 16px;
@@ -124,6 +135,71 @@ body.locked .app { visibility: hidden; }
 .servizi li { padding-top: 8px; border-top: 1px solid var(--line); }
 .nota { color: var(--ink-2); font-size: 12px; }
 
+/* Servizi cliccabili nella tendina destra: normale, hover, selezionato */
+.servizio-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.servizio-btn:hover { background: var(--bg); }
+.servizio-btn.selezionato { background: var(--ink); }
+.servizio-btn.selezionato b,
+.servizio-btn.selezionato .meta,
+.servizio-btn.selezionato .bis { color: var(--panel); }
+.servizio-btn.selezionato .meta { opacity: .8; }
+
+/* Tendina destra: bisogni a tendina (accordion) sopra i servizi dell'ente */
+.bisogno-gruppo { border-top: 1px solid var(--line); }
+.bisogno-gruppo:first-child { border-top: none; }
+.bisogno-intestazione {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  font-weight: 600;
+  padding: 10px 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+.bisogno-intestazione:hover { background: var(--bg); }
+.bisogno-intestazione__conta { font-weight: 400; color: var(--ink-2); font-size: 12px; }
+.bisogno-intestazione__freccia {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 11px;
+  transition: transform var(--tendina-durata, 200ms) ease;
+}
+.bisogno-gruppo:has(.bisogno-corpo.aperto) .bisogno-intestazione__freccia { transform: rotate(180deg); }
+
+/* Bisogno selezionato in tendina sinistra: stesso trattamento grafico qui */
+.bisogno-gruppo.attivo .bisogno-intestazione { background: var(--tendina-colore-attiva, var(--ink)); color: var(--panel); }
+.bisogno-gruppo.attivo .bisogno-intestazione__conta,
+.bisogno-gruppo.attivo .bisogno-intestazione__freccia { color: var(--panel); }
+
+/* Apertura/chiusura morbida, senza misurare l'altezza del contenuto */
+.bisogno-corpo {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--tendina-durata, 200ms) ease;
+}
+.bisogno-corpo.aperto { grid-template-rows: 1fr; }
+.bisogno-corpo .servizi {
+  overflow: hidden;
+  min-height: 0;
+  padding-left: var(--tendina-rientro, 10px);
+  padding-bottom: 10px;
+}
+
 /* Tendina sinistra: blocchi della cartella (domicilio, bisogni) */
 .blocco { margin-top: 20px; }
 .bisogno-btn {
@@ -163,16 +239,7 @@ body.locked .app { visibility: hidden; }
 }
 #domicilio-stato { margin-top: 6px; }
 
-/* Marker del domicilio: provvisorio, solo per distinguerlo dagli enti */
-.domicilio-marker {
-  width: 16px;
-  height: 16px;
-  background: var(--ink);
-  border: 2px solid #fff;
-  border-radius: 4px 4px 4px 0;
-  transform: rotate(45deg);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, .35);
-}
+/* Il marker del domicilio è ora disegnato sulla mappa stessa (vedi js/app.js), non più un elemento HTML. */
 
 /* Fumetto al passaggio del mouse sui marker */
 .mapboxgl-popup-content {
@@ -196,3 +263,16 @@ body.locked .app { visibility: hidden; }
   cursor: pointer;
 }
 .scelta-ente__lista button:hover { background: var(--bg); }
+
+/* Fumetto di stato sul servizio selezionato (percorso): versione compatta del fumetto di hover,
+   resta agganciato al marker finché il servizio è selezionato (niente pulsante di chiusura). */
+.popup-servizio .mapboxgl-popup-content {
+  max-width: 170px;
+  padding: 5px 9px;
+  font-size: 12px;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

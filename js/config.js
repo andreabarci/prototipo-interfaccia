@@ -13,5 +13,9 @@ const CONFIG = {
 
   // Vista iniziale su Milano
   center: [9.19, 45.4642], // [longitudine, latitudine]
-  zoom: 11.5
+  zoom: 12,
+
+  // Quanto ci si può allontanare/avvicinare
+  minZoom: 11,
+  maxZoom: 24
 };

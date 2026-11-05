@@ -45,6 +45,50 @@ html, body {
   pointer-events: none;
 }
 
+/* Selettore del tipo di legame: sovrapposto alla mappa, in alto al centro. Nascosto finché non c'è
+   un servizio di partenza selezionato (vedi mostraSelettoreLegame/nascondiSelettoreLegame in app.js). */
+.selettore-legame {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  z-index: 1;
+}
+.selettore-legame__pulsanti {
+  display: flex;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .12);
+}
+.selettore-legame__pulsante {
+  font: inherit;
+  font-size: 12px;
+  padding: 7px 12px;
+  border: none;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.selettore-legame__pulsante:last-child { border-right: none; }
+.selettore-legame__pulsante:hover { background: var(--bg); }
+.selettore-legame__pulsante.attivo { background: var(--ink); color: var(--panel); }
+.selettore-legame__vuoto {
+  margin: 0;
+  padding: 4px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
 .panel {
   background: var(--panel);
   padding: 16px;
@@ -71,6 +115,15 @@ html, body {
   cursor: pointer;
 }
 .panel__close:hover { background: var(--bg); color: var(--ink); }
+
+/* Elenco dei servizi collegati (adiacenza e, in futuro, gli altri tipi oltre all'equivalenza):
+   separato dal resto della tendina destra con un bordo, non dentro panel-dx-content perché
+   sopravviva ai suoi ricalcoli quando si cambia solo il tipo di legame, non l'ente. */
+.legami-collegati {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
 
 .eyebrow {
   margin: 0 0 6px;
@@ -288,6 +341,16 @@ body.locked .app { visibility: hidden; }
   font-size: 10px;
 }
 .fumetto-servizio__presso { color: var(--ink-2); }
+/* Nome della relazione (solo per i tipi diversi dall'equivalenza, che non cambia): una riga in più
+   sopra al titolo del servizio, stile "eyebrow" ma compatto per stare nel fumetto. */
+.fumetto-servizio__tipo {
+  display: block;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: var(--ink-2);
+  margin-bottom: 2px;
+}
 
 /* Etichetta su una linea del tempo (domicilio → marker, in hover su un ramo): forma a pillola,
    fondo chiaro, bordo dello stesso grigio della linea (vedi --tempo-linea-colore, impostata da JS).
@@ -314,3 +377,9 @@ body.locked .app { visibility: hidden; }
 /* Il capo "nuovo" del ramo (non il servizio di partenza): il dato che il case manager sta
    valutando, in grassetto per distinguerlo dall'altro. */
 .pillola-tempo--enfasi .pillola-tempo__testo { font-weight: 700; }
+
+/* Freccia sul ramo di adiacenza: l'unico tipo di legame con una direzione (dal servizio di
+   partenza verso chi assiste). Il colore (lo stesso grigio del ramo a riposo) è impostato da JS,
+   vedi --ramo-colore-riposo/aggiornaFrecceAdiacenza, perché non è lo stesso grigio delle linee del
+   tempo anche se simile. */
+.freccia-adiacenza { color: var(--ramo-colore-riposo, #aab1b6); pointer-events: none; }

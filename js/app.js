@@ -70,6 +70,15 @@ const RAMO_CAMPIONI = 40; // punti con cui si disegna la curva
 const RAMO_FASCIA_HOVER = 12; // larghezza in px dell'area sensibile invisibile sotto il ramo
 const DISSOLVENZA_MS = 200; // durata della dissolvenza: comparsa dei rami, attenuazione dei marker
 
+// Adiacenza di bisogno, in una sola forma per ora: dal servizio per la persona ai servizi per chi
+// assiste (C01/C02) — regola confermata da Andrea. Stessi rami di equivalenza (stessa curvatura,
+// stessa funzione), ma tratteggiati e più tenui; l'unico tipo con una direzione, quindi una freccia.
+const ADIACENZA_OPACITA = 0.45; // più tenue di RAMO_OPACITA
+const ADIACENZA_TRATTO_PIENO = 3; // px
+const ADIACENZA_TRATTO_VUOTO = 3; // px
+const ADIACENZA_MASSIMO = 5; // al massimo i N più vicini per tempo a piedi dal domicilio
+const ADIACENZA_FRECCIA_DIMENSIONE = 8; // px
+
 // Linee del tempo (domicilio → marker), in hover su un ramo: rette (mai curve, per non confondersi
 // con i rami, che sono curvi), tratteggiate, sottili, colore neutro — natura diversa dai rami anche
 // nel disegno, non solo nel significato. Le etichette con icona e minuti arrivano in un passo dopo.
@@ -80,6 +89,16 @@ const TEMPO_LINEA_TRATTO_PIENO = 4; // px
 const TEMPO_LINEA_TRATTO_VUOTO = 4; // px
 const TEMPO_LINEA_MARGINE = 4; // oltre al raggio del marker, perché non tocchi il bordo/l'icona
 const TEMPO_LINEA_DISSOLVENZA_MS = 150;
+
+// I quattro tipi di legame fra servizi (vedi CLAUDE.md): non c'è un campo nei dati che li identifica
+// già, sono id scelti qui. Equivalenza è l'unico con una regola di calcolo decisa (vedi trovaLegami);
+// gli altri tre restano senza legami finché Andrea non la stabilisce — non è un errore del selettore.
+const TIPI_LEGAME = [
+  { id: "equivalenza", etichetta: "Equivalenza" },
+  { id: "adiacenza", etichetta: "Anche per chi assiste" },
+  { id: "successione", etichetta: "Successione" },
+  { id: "incompatibilita", etichetta: "Incompatibilità" },
+];
 
 // Icona per categoria_origine dell'ente (non la categoria semplificata), dalla cartella icons/.
 // Mappatura provvisoria: più categorie di origine possono condividere la stessa icona.
@@ -170,6 +189,7 @@ window.startApp = async function () {
   document.documentElement.style.setProperty("--tendina-colore-attiva", TENDINA_COLORE_INTESTAZIONE_ATTIVA);
   document.documentElement.style.setProperty("--tempo-linea-colore", TEMPO_LINEA_COLORE);
   document.documentElement.style.setProperty("--tempo-dissolvenza", TEMPO_LINEA_DISSOLVENZA_MS + "ms");
+  document.documentElement.style.setProperty("--ramo-colore-riposo", RAMO_COLORE_RIPOSO);
 
   const mapEl = document.getElementById("map");
   const appEl = document.getElementById("app");
@@ -906,6 +926,9 @@ window.startApp = async function () {
     let destinazioniPerIndice = []; // indice ramo -> { sedeId, servizio, coord, featureId }
     let ramoInEvidenza = null; // indice del ramo sotto il cursore (o del cui marker si è in hover)
     let markerInEvidenza = null; // feature id del marker singolo sotto il cursore, fuori dal percorso
+    // Tipo di legame attivo sul ramo (vedi selettore e trovaLegami più sotto): equivalenza è l'unico
+    // con una regola di calcolo decisa per ora; gli altri restano "nessun legame" finché non lo sarà.
+    let tipoLegameAttivo = "equivalenza";
 
     function aggiornaAttenuazione() {
       if (sediConRamo) {
@@ -924,12 +947,58 @@ window.startApp = async function () {
       }
     }
 
-    // ---------- percorso: rami di equivalenza fra il servizio scelto e i suoi equivalenti
+    // ---------- percorso: rami fra il servizio scelto e i suoi legami (equivalenza o adiacenza)
     let ramiCorrenti = { type: "FeatureCollection", features: [] };
     let timeoutRamiUscita = null;
 
+    // Tratteggio e opacità dipendono dal tipo attivo (vedi ASPETTO): l'equivalenza resta uno stile
+    // pieno e a piena intensità (non cambia nulla della sua grafica esistente), l'adiacenza è
+    // tratteggiata e più tenue. Stesse funzione e livello "rami" per entrambe, come richiesto.
+    function aggiornaStileRamo() {
+      const adiacenza = tipoLegameAttivo === "adiacenza";
+      map.setPaintProperty("rami", "line-opacity", ["case",
+        ["!", ["boolean", ["feature-state", "comparso"], false]], 0,
+        ["boolean", ["feature-state", "inEvidenza"], false], RAMO_OPACITA_HOVER,
+        ["boolean", ["feature-state", "spento"], false], RAMO_OPACITA_SPENTO,
+        adiacenza ? ADIACENZA_OPACITA : RAMO_OPACITA]);
+      // null toglie la proprietà invece di inventare un valore "pieno": questi due livelli non
+      // avevano mai avuto un tratteggio prima d'ora, per l'equivalenza deve restare esattamente così.
+      map.setPaintProperty("rami", "line-dasharray", adiacenza
+        ? [ADIACENZA_TRATTO_PIENO / RAMO_SPESSORE, ADIACENZA_TRATTO_VUOTO / RAMO_SPESSORE]
+        : null);
+      map.setPaintProperty("rami-evidenza", "line-dasharray", adiacenza
+        ? [ADIACENZA_TRATTO_PIENO / RAMO_SPESSORE_HOVER, ADIACENZA_TRATTO_VUOTO / RAMO_SPESSORE_HOVER]
+        : null);
+    }
+
+    // Una freccia sola per ramo, solo per l'adiacenza (l'unico tipo con una direzione): un piccolo
+    // triangolo ruotato secondo la tangente della curva vicino al capo di arrivo. Un pool di Marker
+    // DOM, ricreato a ogni comparsa dei rami — non è richiesto che segua l'hover o si attenui.
+    let frecceAdiacenza = [];
+    function aggiornaFrecceAdiacenza(coordOrigine, coordDestinazioni) {
+      frecceAdiacenza.forEach((m) => m.remove());
+      frecceAdiacenza = [];
+      if (tipoLegameAttivo !== "adiacenza") return;
+      coordDestinazioni.forEach((coordDest) => {
+        const punti = campionaCurva(coordOrigine, coordDest);
+        const pA = map.project(punti[punti.length - 2]);
+        const pB = map.project(punti[punti.length - 1]);
+        const angolo = (Math.atan2(pB.y - pA.y, pB.x - pA.x) * 180) / Math.PI;
+        const el = document.createElement("div");
+        el.className = "freccia-adiacenza";
+        el.innerHTML = '<svg viewBox="0 0 10 10" width="' + ADIACENZA_FRECCIA_DIMENSIONE + '" height="'
+          + ADIACENZA_FRECCIA_DIMENSIONE + '"><path d="M0 0 L9 5 L0 10 Z" fill="currentColor"/></svg>';
+        const marker = new mapboxgl.Marker({ element: el, anchor: "center" })
+          .setLngLat(punti[punti.length - 1])
+          .setRotation(angolo)
+          .addTo(map);
+        frecceAdiacenza.push(marker);
+      });
+    }
+
     function mostraRami(coordOrigine, coordDestinazioni) {
       if (timeoutRamiUscita) { clearTimeout(timeoutRamiUscita); timeoutRamiUscita = null; }
+      aggiornaStileRamo();
       ramiCorrenti = {
         type: "FeatureCollection",
         features: coordDestinazioni.map((coord, i) => ({
@@ -941,6 +1010,7 @@ window.startApp = async function () {
       };
       map.removeFeatureState({ source: "rami" }); // niente stato residuo di una selezione precedente
       map.getSource("rami").setData(ramiCorrenti);
+      aggiornaFrecceAdiacenza(coordOrigine, coordDestinazioni);
       // "comparso" parte falso (quindi opacità 0): lo si alza un istante dopo, così la comparsa è
       // una dissolvenza (vedi "line-opacity-transition" sul livello "rami") e non uno scatto.
       requestAnimationFrame(() => {
@@ -949,6 +1019,8 @@ window.startApp = async function () {
     }
 
     function nascondiRami() {
+      frecceAdiacenza.forEach((m) => m.remove());
+      frecceAdiacenza = [];
       if (!ramiCorrenti.features.length) return;
       ramiCorrenti.features.forEach((f) => map.setFeatureState({ source: "rami", id: f.id }, { comparso: false }));
       if (timeoutRamiUscita) clearTimeout(timeoutRamiUscita);
@@ -1164,7 +1236,14 @@ window.startApp = async function () {
       map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: true, nascondiEtichetta: true });
       impostaInEvidenza(dest.featureId, true);
       const enteDestinazione = enteById[dest.sedeId];
-      popupServizioCollegato.setLngLat(dest.coord).setHTML(fumettoServizio(dest.servizio, enteDestinazione)).addTo(map);
+      // Per l'equivalenza il fumetto resta esattamente com'era (comportamento esistente, da non
+      // toccare); per gli altri tipi si aggiunge una piccola etichetta col nome della relazione.
+      let htmlFumetto = fumettoServizio(dest.servizio, enteDestinazione);
+      if (tipoLegameAttivo !== "equivalenza") {
+        const infoTipo = TIPI_LEGAME.find((t) => t.id === tipoLegameAttivo);
+        htmlFumetto = `<span class="fumetto-servizio__tipo">${infoTipo ? infoTipo.etichetta : ""}</span>` + htmlFumetto;
+      }
+      popupServizioCollegato.setLngLat(dest.coord).setHTML(htmlFumetto).addTo(map);
 
       // Linee del tempo: dal domicilio al servizio di partenza e dal domicilio all'altro capo del
       // ramo. Rette, al bordo dei marker (vedi segmentoLineaTempo), con un'etichetta ciascuna
@@ -1219,35 +1298,144 @@ window.startApp = async function () {
       map.getCanvas().style.cursor = "";
     });
 
-    // Equivalenza funzionale (unico tipo di legame per ora): altri servizi che rispondono allo
-    // stesso bisogno già attivo e che si trovano presso un ente della stessa categoria semplificata.
-    function trovaEquivalenti(servizio, bisognoContesto) {
-      const enteOrigine = enteById[servizio.sede];
-      const perSede = new Map(); // id ente -> un servizio equivalente trovato lì (il primo)
-      for (const altro of servizi) {
-        if (altro.id === servizio.id || altro.sede === servizio.sede) continue;
-        if (altro.risposta !== "R" || !altro.bisogni.includes(bisognoContesto)) continue;
-        const enteAltro = enteById[altro.sede];
-        if (!enteOrigine || !enteAltro || enteAltro.categoria !== enteOrigine.categoria) continue;
-        if (!perSede.has(altro.sede)) perSede.set(altro.sede, altro);
+    // Legami dal servizio di partenza, per tipo (vedi TIPI_LEGAME). Equivalenza funzionale: altri
+    // servizi che rispondono allo stesso bisogno già attivo e si trovano presso un ente della stessa
+    // categoria semplificata — l'unica regola di calcolo decisa finora. Gli altri tre tipi
+    // restituiscono sempre "nessun legame" (Map vuota) finché non viene stabilita una regola: non è
+    // un errore, è il caso vuoto previsto dal selettore (vedi aggiornaMessaggioVuoto).
+    function trovaLegami(servizio, bisognoContesto, tipo) {
+      if (tipo === "equivalenza") {
+        const enteOrigine = enteById[servizio.sede];
+        const perSede = new Map(); // id ente -> un servizio collegato trovato lì (il primo)
+        for (const altro of servizi) {
+          if (altro.id === servizio.id || altro.sede === servizio.sede) continue;
+          if (altro.risposta !== "R" || !altro.bisogni.includes(bisognoContesto)) continue;
+          const enteAltro = enteById[altro.sede];
+          if (!enteOrigine || !enteAltro || enteAltro.categoria !== enteOrigine.categoria) continue;
+          if (!perSede.has(altro.sede)) perSede.set(altro.sede, altro);
+        }
+        return perSede;
       }
-      return perSede;
+
+      if (tipo === "adiacenza") {
+        // Regola confermata da Andrea: dal servizio per la persona (almeno un bisogno B01-B24) ai
+        // servizi per chi assiste (C01 o C02), presso un ente diverso e geolocalizzato, i 5 più
+        // vicini per tempo a piedi dal domicilio attuale (stesso calcolo usato in hover sui rami).
+        const perPersona = servizio.bisogni.some((id) => id[0] === "B");
+        if (!perPersona) return new Map();
+        const candidati = [];
+        for (const altro of servizi) {
+          if (altro.sede === servizio.sede) continue;
+          if (altro.risposta !== "R") continue;
+          if (!altro.bisogni.includes("C01") && !altro.bisogni.includes("C02")) continue;
+          const enteAltro = enteById[altro.sede];
+          if (!enteAltro || enteAltro.lat == null) continue; // deve essere geolocalizzato
+          const tempo = tempiPerEnte[altro.sede];
+          if (!tempo || tempo.stato !== "ok") continue; // non classificabile: resta fuori dalla classifica
+          candidati.push({ altro, minuti: tempo.minuti });
+        }
+        candidati.sort((a, b) => a.minuti - b.minuti);
+        const perSede = new Map();
+        for (const c of candidati) {
+          if (perSede.size >= ADIACENZA_MASSIMO) break;
+          if (!perSede.has(c.altro.sede)) perSede.set(c.altro.sede, c.altro);
+        }
+        return perSede;
+      }
+
+      return new Map(); // gli altri tipi non hanno ancora una regola di calcolo
     }
 
-    function selezionaServizio(servizio) {
+    // ---------- selettore del tipo di legame
+    const selettoreLegameEl = document.getElementById("selettore-legame");
+    const selettoreLegameVuotoEl = document.getElementById("selettore-legame-vuoto");
+    const contenitorePulsantiLegame = document.getElementById("selettore-legame-pulsanti");
+    TIPI_LEGAME.forEach((t) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "selettore-legame__pulsante";
+      btn.dataset.tipo = t.id;
+      btn.textContent = t.etichetta;
+      btn.addEventListener("click", () => selezionaTipoLegame(t.id));
+      contenitorePulsantiLegame.appendChild(btn);
+    });
+    function aggiornaPulsantiLegame() {
+      contenitorePulsantiLegame.querySelectorAll(".selettore-legame__pulsante").forEach((b) => {
+        b.classList.toggle("attivo", b.dataset.tipo === tipoLegameAttivo);
+      });
+    }
+    function mostraSelettoreLegame() { selettoreLegameEl.hidden = false; }
+    function nascondiSelettoreLegame() {
+      selettoreLegameEl.hidden = true;
+      tipoLegameAttivo = "equivalenza"; // il tipo torna all'equivalenza quando il controllo si nasconde
+      aggiornaPulsantiLegame();
+    }
+    function aggiornaMessaggioVuoto() {
+      selettoreLegameVuotoEl.hidden = !(servizioSelezionatoId !== null && destinazioniPerIndice.length === 0);
+    }
+
+    // Elenco dei servizi collegati in tendina destra (nome, ente, tempo a piedi): solo per i tipi
+    // diversi dall'equivalenza, che non ne ha mai avuto uno e non deve cambiare aspetto. Per
+    // l'adiacenza senza legami, il messaggio specifico richiesto invece di quello generico sopra.
+    function aggiornaListaLegami() {
+      const contenitore = document.getElementById("legami-collegati");
+      if (servizioSelezionatoId === null || tipoLegameAttivo === "equivalenza") {
+        contenitore.hidden = true;
+        return;
+      }
+      contenitore.hidden = false;
+      const infoTipo = TIPI_LEGAME.find((t) => t.id === tipoLegameAttivo);
+      document.getElementById("legami-collegati-titolo").textContent = infoTipo ? infoTipo.etichetta : "";
+      const vuotoEl = document.getElementById("legami-collegati-vuoto");
+      const listaEl = document.getElementById("legami-collegati-lista");
+      if (destinazioniPerIndice.length === 0) {
+        vuotoEl.hidden = false;
+        vuotoEl.textContent = tipoLegameAttivo === "adiacenza"
+          ? "Nessun servizio adiacente per chi assiste"
+          : "Nessun legame di questo tipo";
+        listaEl.innerHTML = "";
+        return;
+      }
+      vuotoEl.hidden = true;
+      listaEl.innerHTML = destinazioniPerIndice.map((d) => {
+        const ente = enteById[d.sedeId];
+        return `<li><b>${d.servizio.titolo || "Servizio"}</b><br>`
+          + `<span class="meta">presso ${ente ? ente.nome : d.sedeId} · ${testoEtichettaTempo(d.sedeId)}</span></li>`;
+      }).join("");
+    }
+    function selezionaTipoLegame(tipo) {
+      if (tipo === tipoLegameAttivo) return;
+      tipoLegameAttivo = tipo;
+      aggiornaPulsantiLegame();
+      ricostruisciRami();
+    }
+    aggiornaPulsantiLegame();
+
+    // Ricalcola i legami del tipo attivo a partire dal servizio selezionato, ridisegna i rami (stessa
+    // funzione e stile di sempre) e lo stato dei marker. Usata sia alla prima selezione di un
+    // servizio sia a ogni cambio di tipo nel selettore.
+    function ricostruisciRami() {
+      if (servizioSelezionatoId === null) return;
+      const servizio = servizioById[servizioSelezionatoId];
       // Senza un bisogno attivo in tendina sinistra, si usa il primo bisogno del servizio stesso:
       // il clic su un marker funziona anche fuori dal ventaglio, quindi serve comunque un contesto.
       const bisognoContesto = bisognoSelezionato || servizio.bisogni[0];
-      if (!bisognoContesto) return;
-
-      const equivalenti = trovaEquivalenti(servizio, bisognoContesto);
       const origine = gruppiArray[featureIdPerEnte[servizio.sede]];
-      if (!origine) return;
+      if (!bisognoContesto || !origine) {
+        sediConRamo = new Set();
+        destinazioniPerIndice = [];
+        nascondiRami();
+        aggiornaAttenuazione();
+        aggiornaMessaggioVuoto();
+        aggiornaListaLegami();
+        return;
+      }
       const coordOrigine = [origine[0].lon, origine[0].lat];
 
+      const legami = trovaLegami(servizio, bisognoContesto, tipoLegameAttivo);
       sediConRamo = new Set();
       destinazioniPerIndice = [];
-      for (const [sedeId, servizioAltro] of equivalenti) {
+      for (const [sedeId, servizioAltro] of legami) {
         const gruppoDest = gruppiArray[featureIdPerEnte[sedeId]];
         if (!gruppoDest) continue;
         sediConRamo.add(sedeId);
@@ -1257,14 +1445,27 @@ window.startApp = async function () {
         });
       }
 
-      servizioSelezionatoId = servizio.id;
-      mostraRami(coordOrigine, destinazioniPerIndice.map((d) => d.coord));
-      // L'etichetta col nome dell'ente si spegne: la stessa informazione entra nel fumetto, sotto al
-      // servizio (vedi testo-opacity di enti-etichetta/enti-capo-ramo-etichetta più sotto).
-      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { nascondiEtichetta: true });
-      const enteOrigine = enteById[servizio.sede];
-      popupServizio.setLngLat(coordOrigine).setHTML(fumettoServizio(servizio, enteOrigine)).addTo(map);
+      if (destinazioniPerIndice.length > 0) mostraRami(coordOrigine, destinazioniPerIndice.map((d) => d.coord));
+      else nascondiRami();
       aggiornaAttenuazione();
+      aggiornaMessaggioVuoto();
+      aggiornaListaLegami();
+    }
+
+    function selezionaServizio(servizio) {
+      servizioSelezionatoId = servizio.id;
+      ricostruisciRami();
+
+      const origine = gruppiArray[featureIdPerEnte[servizio.sede]];
+      if (origine) {
+        // L'etichetta col nome dell'ente si spegne: la stessa informazione entra nel fumetto, sotto
+        // al servizio (vedi testo-opacity di enti-etichetta/enti-capo-ramo-etichetta più sotto).
+        if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { nascondiEtichetta: true });
+        const enteOrigine = enteById[servizio.sede];
+        const coordOrigine = [origine[0].lon, origine[0].lat];
+        popupServizio.setLngLat(coordOrigine).setHTML(fumettoServizio(servizio, enteOrigine)).addTo(map);
+      }
+      mostraSelettoreLegame();
 
       // Un servizio sotto più bisogni compare più volte: tutte le sue occorrenze vanno selezionate.
       panelDxContent.querySelectorAll(".servizio-btn").forEach((b) => b.classList.toggle("selezionato", b.dataset.id === servizio.id));
@@ -1279,6 +1480,8 @@ window.startApp = async function () {
       sediConRamo = null;
       destinazioniPerIndice = [];
       nascondiRami();
+      nascondiSelettoreLegame();
+      aggiornaListaLegami();
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { nascondiEtichetta: false });
       popupServizio.remove();
       aggiornaAttenuazione();

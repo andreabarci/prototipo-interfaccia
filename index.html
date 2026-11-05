@@ -31,6 +31,10 @@
 
     <main class="stage">
       <div id="map"></div>
+      <div class="selettore-legame" id="selettore-legame" hidden>
+        <div class="selettore-legame__pulsanti" id="selettore-legame-pulsanti"></div>
+        <p class="selettore-legame__vuoto" id="selettore-legame-vuoto" hidden>Nessun legame di questo tipo</p>
+      </div>
     </main>
 
     <aside class="panel panel--dx" id="panel-dx">
@@ -38,6 +42,13 @@
       <div class="panel__content" id="panel-dx-content">
         <p class="eyebrow">Tendina destra</p>
         <p>Servizio selezionato.</p>
+      </div>
+      <!-- Fuori da panel-dx-content apposta: mostraEnte riscrive solo quello sopra, questo blocco
+           resta quando si cambia il tipo di legame senza cambiare ente (vedi aggiornaListaLegami). -->
+      <div class="legami-collegati" id="legami-collegati" hidden>
+        <p class="eyebrow" id="legami-collegati-titolo"></p>
+        <p class="meta" id="legami-collegati-vuoto" hidden></p>
+        <ul class="servizi" id="legami-collegati-lista"></ul>
       </div>
     </aside>
   </div>

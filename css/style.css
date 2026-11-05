@@ -269,10 +269,48 @@ body.locked .app { visibility: hidden; }
 .popup-servizio .mapboxgl-popup-content {
   max-width: 170px;
   padding: 5px 9px;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.3;
+}
+/* Il servizio viene prima (gerarchia); sotto, più piccolo, "presso" in grigio chiaro e il nome
+   dell'ente nel colore del suo macrodominio — la stessa informazione che prima stava nell'etichetta
+   sul marker, ora qui quando un servizio è selezionato (vedi selezionaServizio e fumettoServizio,
+   usata anche per il fumetto del marker collegato da un ramo in hover). */
+.fumetto-servizio__titolo {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.fumetto-servizio__ente {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+}
+.fumetto-servizio__presso { color: var(--ink-2); }
+
+/* Etichetta su una linea del tempo (domicilio → marker, in hover su un ramo): forma a pillola,
+   fondo chiaro, bordo dello stesso grigio della linea (vedi --tempo-linea-colore, impostata da JS).
+   Nascosta di default (opacity 0): comparsa/sparizione sono una dissolvenza via CSS, non un
+   aggiungere/togliere il marker dalla mappa. */
+.pillola-tempo {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px;
+  background: var(--panel);
+  border: 1px solid var(--tempo-linea-colore, #8a9299);
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--ink);
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, .1);
+  opacity: 0;
+  transition: opacity var(--tempo-dissolvenza, 150ms) ease;
+  pointer-events: none;
+}
+.pillola-tempo.mostra { opacity: 1; }
+.pillola-tempo svg { flex: none; color: var(--tempo-linea-colore, #8a9299); }
+/* Il capo "nuovo" del ramo (non il servizio di partenza): il dato che il case manager sta
+   valutando, in grassetto per distinguerlo dall'altro. */
+.pillola-tempo--enfasi .pillola-tempo__testo { font-weight: 700; }

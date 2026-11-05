@@ -70,6 +70,17 @@ const RAMO_CAMPIONI = 40; // punti con cui si disegna la curva
 const RAMO_FASCIA_HOVER = 12; // larghezza in px dell'area sensibile invisibile sotto il ramo
 const DISSOLVENZA_MS = 200; // durata della dissolvenza: comparsa dei rami, attenuazione dei marker
 
+// Linee del tempo (domicilio → marker), in hover su un ramo: rette (mai curve, per non confondersi
+// con i rami, che sono curvi), tratteggiate, sottili, colore neutro — natura diversa dai rami anche
+// nel disegno, non solo nel significato. Le etichette con icona e minuti arrivano in un passo dopo.
+const TEMPO_LINEA_COLORE = "#8a9299"; // grigio medio, neutro
+const TEMPO_LINEA_SPESSORE = 1.5;
+const TEMPO_LINEA_OPACITA = 0.9;
+const TEMPO_LINEA_TRATTO_PIENO = 4; // px
+const TEMPO_LINEA_TRATTO_VUOTO = 4; // px
+const TEMPO_LINEA_MARGINE = 4; // oltre al raggio del marker, perché non tocchi il bordo/l'icona
+const TEMPO_LINEA_DISSOLVENZA_MS = 150;
+
 // Icona per categoria_origine dell'ente (non la categoria semplificata), dalla cartella icons/.
 // Mappatura provvisoria: più categorie di origine possono condividere la stessa icona.
 const ICONA_PER_CATEGORIA = {
@@ -157,6 +168,8 @@ window.startApp = async function () {
   document.documentElement.style.setProperty("--tendina-durata", TENDINA_DURATA_MS + "ms");
   document.documentElement.style.setProperty("--tendina-rientro", TENDINA_RIENTRO);
   document.documentElement.style.setProperty("--tendina-colore-attiva", TENDINA_COLORE_INTESTAZIONE_ATTIVA);
+  document.documentElement.style.setProperty("--tempo-linea-colore", TEMPO_LINEA_COLORE);
+  document.documentElement.style.setProperty("--tempo-dissolvenza", TEMPO_LINEA_DISSOLVENZA_MS + "ms");
 
   const mapEl = document.getElementById("map");
   const appEl = document.getElementById("app");
@@ -171,8 +184,9 @@ window.startApp = async function () {
   }
 
   // ---------- dati
-  const [bisogni, enti, servizi] = await Promise.all(
-    ["data/bisogni.json", "data/enti.json", "data/servizi.json"].map((u) => fetch(u).then((r) => r.json()))
+  const [bisogni, enti, servizi, tempiRiserva] = await Promise.all(
+    ["data/bisogni.json", "data/enti.json", "data/servizi.json", "data/tempi_domicilio_iniziale.json"]
+      .map((u) => fetch(u).then((r) => r.json()))
   );
   const bisognoById = Object.fromEntries(bisogni.map((b) => [b.id, b]));
   const enteById = Object.fromEntries(enti.map((e) => [e.id, e]));
@@ -316,7 +330,7 @@ window.startApp = async function () {
       <p class="eyebrow">Domicilio</p>
       <form class="domicilio-form" id="form-domicilio">
         <input type="text" id="domicilio-indirizzo" placeholder="Scrivi un indirizzo…" autocomplete="off">
-        <button type="submit">Vai</button>
+        <button type="submit">Conferma</button>
       </form>
       <p class="meta" id="domicilio-stato">Posizione attuale (inventata): ${DOMICILIO.lat.toFixed(4)}, ${DOMICILIO.lon.toFixed(4)}</p>
     </div>
@@ -375,11 +389,67 @@ window.startApp = async function () {
     };
   }
 
+  // Sposta il marker del domicilio sulla mappa e rilancia il calcolo dei tempi a piedi.
+  // Tenuta separata dal campo indirizzo, così la si può richiamare anche da altri punti.
+  function aggiornaDomicilio(lng, lat) {
+    DOMICILIO = { lat, lon: lng };
+    const sorgenteDomicilio = map.getSource("domicilio");
+    if (sorgenteDomicilio) sorgenteDomicilio.setData(datiDomicilio());
+    map.flyTo({ center: [lng, lat], zoom: Math.max(map.getZoom(), 14) });
+    calcolaTempi(lat, lng, false);
+  }
+
+  // Tempi a piedi dal domicilio a ogni ente (per id ente: i servizi di uno stesso ente lo
+  // condividono). stato: "calcolo" mentre la richiesta è in corso, "ok" con minuti e metri una volta
+  // arrivata, "errore" se la API non risponde. Per il domicilio INIZIALE, un errore usa i valori di
+  // riserva calcolati una volta con strumenti/calcola_tempi.py (vedi data/tempi_domicilio_iniziale.json);
+  // per un domicilio cambiato dopo, un errore resta un errore (le etichette mostreranno "—").
+  let tempiPerEnte = {};
+  let richiestaTempiCorrente = 0; // scarta le risposte di una richiesta superata da una più recente
+
+  async function calcolaTempi(lat, lon, origineIniziale) {
+    const idRichiesta = ++richiestaTempiCorrente;
+    for (const e of sulla_mappa) tempiPerEnte[e.id] = { stato: "calcolo" };
+
+    const GRUPPO = 24; // + il domicilio = 25, il massimo della Matrix API
+    for (let i = 0; i < sulla_mappa.length; i += GRUPPO) {
+      const gruppo = sulla_mappa.slice(i, i + GRUPPO);
+      const coordinate = [[lon, lat], ...gruppo.map((e) => [e.lon, e.lat])]
+        .map(([lo, la]) => lo + "," + la).join(";");
+      const url = "https://api.mapbox.com/directions-matrix/v1/mapbox/walking/" + coordinate
+        + "?sources=0&annotations=duration,distance&access_token=" + CONFIG.mapboxToken;
+      try {
+        const risposta = await fetch(url);
+        const dati = await risposta.json();
+        if (idRichiesta !== richiestaTempiCorrente) return; // il domicilio è cambiato di nuovo nel frattempo
+        if (dati.code !== "Ok") throw new Error(dati.code);
+        const durate = dati.durations[0];
+        const distanze = dati.distances[0];
+        gruppo.forEach((e, idx) => {
+          const durata = durate[idx + 1];
+          tempiPerEnte[e.id] = durata == null
+            ? { stato: "errore" } // irraggiungibile a piedi secondo il routing
+            : { stato: "ok", minuti: Math.round(durata / 60), metri: Math.round(distanze[idx + 1]) };
+        });
+      } catch (err) {
+        if (idRichiesta !== richiestaTempiCorrente) return;
+        console.warn("Tempi a piedi non calcolati per un gruppo di enti:", err.message);
+        gruppo.forEach((e) => {
+          tempiPerEnte[e.id] = (origineIniziale && tempiRiserva[e.id])
+            ? { stato: "ok", ...tempiRiserva[e.id] }
+            : { stato: "errore" };
+        });
+      }
+    }
+  }
+  calcolaTempi(DOMICILIO.lat, DOMICILIO.lon, true);
+
   let scelto = null; // id numerico della feature "enti" attualmente selezionata (ente o cluster aperto)
 
   map.on("load", async () => {
     map.addSource("enti", { type: "geojson", data: geojson });
     map.addSource("rami", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+    map.addSource("tempo-linee", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
     for (const [nome, conteggi] of torteDaGenerare) {
       if (!map.hasImage(nome)) map.addImage(nome, disegnaTorta(conteggi), { pixelRatio: PIXELRATIO_TORTA });
     }
@@ -510,6 +580,25 @@ window.startApp = async function () {
       layout: { "line-cap": "round", "line-join": "round" },
       paint: { "line-width": RAMO_FASCIA_HOVER, "line-opacity": 0 },
     }, "enti-ombra");
+
+    // Linee del tempo (domicilio → marker): ancora più sotto dei rami (beforeId "rami-hitbox", che
+    // esiste da qui in poi), così l'ordine è sempre base cartografica < linee del tempo < rami <
+    // marker, come richiesto. Rette, tratteggiate, mai curve: diverse dai rami anche nel disegno, non
+    // solo nel significato. "comparso" segue lo stesso schema dei rami: parte falso, un istante dopo
+    // passa a vero, per la dissolvenza (vedi mostraLineeTempo più sotto).
+    map.addLayer({
+      id: "tempo-linee",
+      type: "line",
+      source: "tempo-linee",
+      layout: { "line-cap": "butt" }, // non "round": non deve sporgere oltre il bordo del marker
+      paint: {
+        "line-color": TEMPO_LINEA_COLORE,
+        "line-width": TEMPO_LINEA_SPESSORE,
+        "line-dasharray": [TEMPO_LINEA_TRATTO_PIENO / TEMPO_LINEA_SPESSORE, TEMPO_LINEA_TRATTO_VUOTO / TEMPO_LINEA_SPESSORE],
+        "line-opacity": ["case", ["boolean", ["feature-state", "comparso"], false], TEMPO_LINEA_OPACITA, 0],
+        "line-opacity-transition": { duration: TEMPO_LINEA_DISSOLVENZA_MS },
+      },
+    }, "rami-hitbox");
 
     // Il ramo vero e proprio: sottile, estremità arrotondate, nessuna freccia (l'equivalenza non ha
     // direzione). "comparso" parte falso e passa a vero un istante dopo aver ricevuto i dati, così
@@ -682,7 +771,10 @@ window.startApp = async function () {
         "text-color": coloreEnte,
         "text-halo-color": ETICHETTA_BORDO_COLORE,
         "text-halo-width": ETICHETTA_BORDO_SPESSORE,
+        // nascondiEtichetta vince su tutto: quando un servizio è selezionato, il nome dell'ente non
+        // sta più qui ma dentro al fumetto, insieme al servizio (vedi selezionaServizio).
         "text-opacity": ["case",
+          ["boolean", ["feature-state", "nascondiEtichetta"], false], 0,
           ["boolean", ["feature-state", "scelto"], false], 1,
           ["boolean", ["feature-state", "inEvidenzaMarker"], false], 1,
           0],
@@ -767,6 +859,7 @@ window.startApp = async function () {
         "text-halo-color": ETICHETTA_BORDO_COLORE,
         "text-halo-width": ETICHETTA_BORDO_SPESSORE,
         "text-opacity": ["case",
+          ["boolean", ["feature-state", "nascondiEtichetta"], false], 0,
           ["all",
             ["boolean", ["feature-state", "capoRamo"], false],
             ["any", ["boolean", ["feature-state", "scelto"], false], ["boolean", ["feature-state", "inEvidenzaMarker"], false]]],
@@ -866,6 +959,167 @@ window.startApp = async function () {
       }, DISSOLVENZA_MS);
     }
 
+    // ---------- percorso: linee del tempo (domicilio → marker), in hover su un ramo
+    // Raggio attuale di un marker in pixel, calcolato in JS (non un'espressione Mapbox): serve per
+    // fermare la linea esattamente al bordo. Rispecchia la stessa logica di tagliaMarker, con lo
+    // zoom corrente al posto delle due fermate fisse 10/14 (stessa interpolazione lineare, bloccata
+    // oltre i due estremi come fa Mapbox).
+    function raggioMarkerPx(featureId, zoom, inEvidenza) {
+      const t = Math.max(0, Math.min(1, (zoom - 10) / 4));
+      const grandeF = featureId === scelto || gruppiArray[featureId].length > 1;
+      const normale = RAGGIO_NORMALE[10] + (RAGGIO_NORMALE[14] - RAGGIO_NORMALE[10]) * t;
+      const grande = RAGGIO_GRANDE[10] + (RAGGIO_GRANDE[14] - RAGGIO_GRANDE[10]) * t;
+      const base = grandeF ? grande : normale;
+      return inEvidenza ? base * FATTORE_HOVER_MARKER : base;
+    }
+    function raggioDomicilioPx(zoom) {
+      const t = Math.max(0, Math.min(1, (zoom - 10) / 4));
+      return RAGGIO_GRANDE[10] + (RAGGIO_GRANDE[14] - RAGGIO_GRANDE[10]) * t; // sempre "grande", mai in hover
+    }
+
+    // Il punto sul segmento coordCentro→coordAltro, spostato di raggioPx pixel verso l'altro
+    // estremo: è dove la linea deve iniziare o fermarsi, al bordo del marker e non al centro.
+    function puntoAlBordo(coordCentro, coordAltro, raggioPx) {
+      const p0 = map.project(coordCentro);
+      const p1 = map.project(coordAltro);
+      const dx = p1.x - p0.x, dy = p1.y - p0.y;
+      const lunghezza = Math.hypot(dx, dy) || 1;
+      const fattore = Math.min(raggioPx / lunghezza, 0.49); // mai oltre la metà, se i marker si toccano
+      const lngLat = map.unproject([p0.x + dx * fattore, p0.y + dy * fattore]);
+      return [lngLat.lng, lngLat.lat];
+    }
+
+    function segmentoLineaTempo(coordA, raggioA, coordB, raggioB) {
+      return {
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            puntoAlBordo(coordA, coordB, raggioA + TEMPO_LINEA_MARGINE),
+            puntoAlBordo(coordB, coordA, raggioB + TEMPO_LINEA_MARGINE),
+          ],
+        },
+        properties: {},
+      };
+    }
+
+    // Stesso schema di mostraRami/nascondiRami: "comparso" parte falso, passa a vero un istante
+    // dopo, così la comparsa è una dissolvenza; alla sparizione si aspetta la dissolvenza prima di
+    // svuotare davvero i dati.
+    let lineeTempoCorrenti = { type: "FeatureCollection", features: [] };
+    let timeoutLineeTempoUscita = null;
+
+    function mostraLineeTempo(segmenti) {
+      if (timeoutLineeTempoUscita) { clearTimeout(timeoutLineeTempoUscita); timeoutLineeTempoUscita = null; }
+      lineeTempoCorrenti = { type: "FeatureCollection", features: segmenti.map((f, i) => ({ ...f, id: i })) };
+      map.removeFeatureState({ source: "tempo-linee" });
+      map.getSource("tempo-linee").setData(lineeTempoCorrenti);
+      requestAnimationFrame(() => {
+        lineeTempoCorrenti.features.forEach((f) => map.setFeatureState({ source: "tempo-linee", id: f.id }, { comparso: true }));
+      });
+    }
+
+    function nascondiLineeTempo() {
+      if (!lineeTempoCorrenti.features.length) return;
+      lineeTempoCorrenti.features.forEach((f) => map.setFeatureState({ source: "tempo-linee", id: f.id }, { comparso: false }));
+      if (timeoutLineeTempoUscita) clearTimeout(timeoutLineeTempoUscita);
+      timeoutLineeTempoUscita = setTimeout(() => {
+        lineeTempoCorrenti = { type: "FeatureCollection", features: [] };
+        map.getSource("tempo-linee").setData(lineeTempoCorrenti);
+        timeoutLineeTempoUscita = null;
+      }, TEMPO_LINEA_DISSOLVENZA_MS);
+    }
+
+    // Testo di un'etichetta: "…" mentre il calcolo è in corso, "—" se non è arrivato nessun tempo,
+    // altrimenti i minuti arrotondati (vedi calcolaTempi).
+    function testoEtichettaTempo(enteId) {
+      const t = tempiPerEnte[enteId];
+      if (!t || t.stato === "calcolo") return "…";
+      if (t.stato === "errore") return "—";
+      return t.minuti + " min";
+    }
+
+    // Icona provvisoria, semplice: una persona stilizzata che cammina (testa + tronco + gambe e
+    // braccia divaricate). Eredita il colore di testo dell'etichetta (currentColor).
+    function iconaPersonaCheCammina() {
+      return '<svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">'
+        + '<circle cx="12" cy="4" r="2.2" fill="currentColor"/>'
+        + '<path d="M12 7 L12 14 M12 14 L8 20 M12 14 L16 19 M12 9 L7 12 M12 9 L17 11" '
+        + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>'
+        + '</svg>';
+    }
+    function pillolaTempoHtml(testo) {
+      return iconaPersonaCheCammina() + `<span class="pillola-tempo__testo">${testo}</span>`;
+    }
+
+    // Le due etichette, una per linea: pronte dall'avvio, invisibili finché non servono (vedi CSS
+    // ".pillola-tempo" / ".mostra") — più semplice che aggiungerle e toglierle dalla mappa ogni volta.
+    const etichettaTempoOrigine = new mapboxgl.Marker({
+      element: Object.assign(document.createElement("div"), { className: "pillola-tempo" }),
+      anchor: "center",
+    }).setLngLat([0, 0]).addTo(map);
+    const etichettaTempoDestinazione = new mapboxgl.Marker({
+      element: Object.assign(document.createElement("div"), { className: "pillola-tempo pillola-tempo--enfasi" }),
+      anchor: "center",
+    }).setLngLat([0, 0]).addTo(map);
+
+    // Posizione delle due etichette: al centro del tratto visibile di ciascuna linea (quello che
+    // resta fra i due bordi dei marker), spostata in perpendicolare per non stare sul tratteggio. Se
+    // le due etichette risultano troppo vicine, si allontanano lungo la propria linea (non di lato).
+    function posizionaEtichetteTempo(segOrigine, segDestinazione) {
+      const OFFSET_PERPENDICOLARE = 8; // px, di lato rispetto alla linea
+      const DISTANZA_MINIMA = 60; // px, sotto cui si considerano "troppo vicine"
+      function base(seg) {
+        if (!seg) return null;
+        const p0 = map.project(seg.geometry.coordinates[0]);
+        const p1 = map.project(seg.geometry.coordinates[1]);
+        const dx = p1.x - p0.x, dy = p1.y - p0.y;
+        const lunghezza = Math.hypot(dx, dy) || 1;
+        return { p0, dx, dy, ux: dx / lunghezza, uy: dy / lunghezza };
+      }
+      const basi = [base(segOrigine), base(segDestinazione)];
+      const frazioni = [0.5, 0.5];
+      function posizionePx(i) {
+        const b = basi[i];
+        if (!b) return null;
+        const cx = b.p0.x + b.dx * frazioni[i];
+        const cy = b.p0.y + b.dy * frazioni[i];
+        return { x: cx - b.uy * OFFSET_PERPENDICOLARE, y: cy + b.ux * OFFSET_PERPENDICOLARE };
+      }
+      if (basi[0] && basi[1]) {
+        for (let tentativi = 0; tentativi < 6; tentativi++) {
+          const p = [posizionePx(0), posizionePx(1)];
+          if (Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) >= DISTANZA_MINIMA) break;
+          frazioni[0] = Math.max(0.3, frazioni[0] - 0.06);
+          frazioni[1] = Math.min(0.7, frazioni[1] + 0.06);
+        }
+      }
+      return [0, 1].map((i) => {
+        const pos = posizionePx(i);
+        if (!pos) return null;
+        const lngLat = map.unproject([pos.x, pos.y]);
+        return [lngLat.lng, lngLat.lat];
+      });
+    }
+
+    function mostraEtichetteTempo(posizioni, testi) {
+      if (posizioni[0]) {
+        etichettaTempoOrigine.getElement().innerHTML = pillolaTempoHtml(testi[0]);
+        etichettaTempoOrigine.setLngLat(posizioni[0]);
+        etichettaTempoOrigine.getElement().classList.add("mostra");
+      } else {
+        etichettaTempoOrigine.getElement().classList.remove("mostra");
+      }
+      etichettaTempoDestinazione.getElement().innerHTML = pillolaTempoHtml(testi[1]);
+      etichettaTempoDestinazione.setLngLat(posizioni[1]);
+      etichettaTempoDestinazione.getElement().classList.add("mostra");
+    }
+
+    function nascondiEtichetteTempo() {
+      etichettaTempoOrigine.getElement().classList.remove("mostra");
+      etichettaTempoDestinazione.getElement().classList.remove("mostra");
+    }
+
     // Fumetti di stato: solo testo, nessun pulsante di chiusura.
     // - popupServizio: il servizio scelto in tendina destra, fisso finché resta selezionato.
     // - popupServizioCollegato: il servizio equivalente all'altro capo del ramo in evidenza, sopra
@@ -878,6 +1132,17 @@ window.startApp = async function () {
       closeButton: false, closeOnClick: false, focusAfterOpen: false,
       anchor: "bottom", offset: 14, className: "popup-servizio",
     });
+
+    // Contenuto dei due fumetti sopra: servizio al primo posto, sotto l'ente che lo ospita ("presso",
+    // in grigio chiaro, + il nome nel colore del suo macrodominio). Stesso markup per entrambi.
+    function fumettoServizio(servizio, ente) {
+      const colore = COLORI[ente.macro_dominio] || COLORE_CLUSTER;
+      return `<strong class="fumetto-servizio__titolo">${servizio.titolo || "Servizio"}</strong>`
+        + `<span class="fumetto-servizio__ente">`
+        + `<span class="fumetto-servizio__presso">presso</span> `
+        + `<span style="color:${colore}">${ente.nome}</span>`
+        + `</span>`;
+    }
 
     // Hover su un ramo o sul marker che collega: il ramo passa in primo piano (più scuro, più
     // spesso), tutti gli altri rami si attenuano ulteriormente per non affollare la lettura delle
@@ -894,9 +1159,37 @@ window.startApp = async function () {
       // loro via feature-state ("capoRamo"), non riscrivendo i dati: altrimenti arriverebbero a
       // schermo un istante dopo il ramo, con lo sfarfallio che si vedeva prima.
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { capoRamo: true });
-      map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: true });
+      // nascondiEtichetta anche qui: il nome dell'ente di destinazione è già nel fumetto composto
+      // (vedi fumettoServizio), l'etichetta separata sotto al marker sarebbe ridondante.
+      map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: true, nascondiEtichetta: true });
       impostaInEvidenza(dest.featureId, true);
-      popupServizioCollegato.setLngLat(dest.coord).setHTML(`<strong>${dest.servizio.titolo || "Servizio"}</strong>`).addTo(map);
+      const enteDestinazione = enteById[dest.sedeId];
+      popupServizioCollegato.setLngLat(dest.coord).setHTML(fumettoServizio(dest.servizio, enteDestinazione)).addTo(map);
+
+      // Linee del tempo: dal domicilio al servizio di partenza e dal domicilio all'altro capo del
+      // ramo. Rette, al bordo dei marker (vedi segmentoLineaTempo), con un'etichetta ciascuna
+      // (icona + minuti, "…" se il calcolo è ancora in corso, "—" se non è arrivato). Quella verso
+      // l'altro capo del ramo è in grassetto: è il dato nuovo che si sta valutando.
+      const zoom = map.getZoom();
+      const coordDomicilio = [DOMICILIO.lon, DOMICILIO.lat];
+      const raggioDomicilio = raggioDomicilioPx(zoom);
+
+      let segOrigine = null;
+      let testoOrigine = null;
+      if (scelto !== null && gruppiArray[scelto]) {
+        const coordOrigine = [gruppiArray[scelto][0].lon, gruppiArray[scelto][0].lat];
+        const raggioOrigine = raggioMarkerPx(scelto, zoom, markerInEvidenza === scelto);
+        segOrigine = segmentoLineaTempo(coordDomicilio, raggioDomicilio, coordOrigine, raggioOrigine);
+        const servizioOrigine = servizioSelezionatoId ? servizioById[servizioSelezionatoId] : null;
+        if (servizioOrigine) testoOrigine = testoEtichettaTempo(servizioOrigine.sede);
+      }
+      const raggioDestinazione = raggioMarkerPx(dest.featureId, zoom, true);
+      const segDestinazione = segmentoLineaTempo(coordDomicilio, raggioDomicilio, dest.coord, raggioDestinazione);
+      const testoDestinazione = testoEtichettaTempo(dest.sedeId);
+
+      mostraLineeTempo(segOrigine ? [segOrigine, segDestinazione] : [segDestinazione]);
+      const posizioni = posizionaEtichetteTempo(segOrigine, segDestinazione);
+      mostraEtichetteTempo(posizioni, [testoOrigine, testoDestinazione]);
     }
 
     function spegniEvidenziaRamo() {
@@ -905,10 +1198,12 @@ window.startApp = async function () {
       ramiCorrenti.features.forEach((f) => map.setFeatureState({ source: "rami", id: f.id }, { inEvidenza: false, spento: false }));
       if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { capoRamo: false });
       if (dest) {
-        map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: false });
+        map.setFeatureState({ source: "enti", id: dest.featureId }, { capoRamo: false, nascondiEtichetta: false });
         impostaInEvidenza(dest.featureId, false);
       }
       popupServizioCollegato.remove();
+      nascondiLineeTempo();
+      nascondiEtichetteTempo();
       ramoInEvidenza = null;
     }
 
@@ -964,7 +1259,11 @@ window.startApp = async function () {
 
       servizioSelezionatoId = servizio.id;
       mostraRami(coordOrigine, destinazioniPerIndice.map((d) => d.coord));
-      popupServizio.setLngLat(coordOrigine).setHTML(`<strong>${servizio.titolo || "Servizio"}</strong>`).addTo(map);
+      // L'etichetta col nome dell'ente si spegne: la stessa informazione entra nel fumetto, sotto al
+      // servizio (vedi testo-opacity di enti-etichetta/enti-capo-ramo-etichetta più sotto).
+      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { nascondiEtichetta: true });
+      const enteOrigine = enteById[servizio.sede];
+      popupServizio.setLngLat(coordOrigine).setHTML(fumettoServizio(servizio, enteOrigine)).addTo(map);
       aggiornaAttenuazione();
 
       // Un servizio sotto più bisogni compare più volte: tutte le sue occorrenze vanno selezionate.
@@ -980,6 +1279,7 @@ window.startApp = async function () {
       sediConRamo = null;
       destinazioniPerIndice = [];
       nascondiRami();
+      if (scelto !== null) map.setFeatureState({ source: "enti", id: scelto }, { nascondiEtichetta: false });
       popupServizio.remove();
       aggiornaAttenuazione();
       panelDxContent.querySelectorAll(".servizio-btn").forEach((b) => b.classList.remove("selezionato"));
@@ -987,7 +1287,10 @@ window.startApp = async function () {
 
     function selezionaMarker(featureId, ente) {
       if (scelto !== null) {
-        map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null });
+        // nascondiEtichetta va spento qui e non solo in deselezionaServizio: quando si passa da un
+        // ente a un altro, mostraEnte (più sotto) chiama deselezionaServizio dopo aver già riassegnato
+        // "scelto" al nuovo marker — altrimenti l'etichetta del vecchio resterebbe spenta per sempre.
+        map.setFeatureState({ source: "enti", id: scelto }, { scelto: false, coloreScelto: null, nascondiEtichetta: false });
         // Un marker singolo torna "normale" (un cluster resta sempre grande, vedi geojson iniziale).
         if (gruppiArray[scelto].length === 1) featureById[scelto].properties.etichettaGrande = false;
       }
@@ -1194,6 +1497,12 @@ window.startApp = async function () {
         scelto = null;
       }
     });
+
+    // Il domicilio resta sempre sopra a tutti gli altri marker e rami, qualunque cosa venga
+    // aggiunta sopra di lui nel frattempo (es. l'icona, caricata in modo asincrono).
+    ["domicilio-ombra", "domicilio-cerchio", "domicilio-icona"].forEach((id) => {
+      if (map.getLayer(id)) map.moveLayer(id);
+    });
   });
 
   // ---------- domicilio: spostarlo scrivendo un indirizzo
@@ -1230,10 +1539,8 @@ window.startApp = async function () {
       return;
     }
     const [lon, lat] = trovato.center;
-    DOMICILIO = { lat, lon };
-    const sorgenteDomicilio = map.getSource("domicilio");
-    if (sorgenteDomicilio) sorgenteDomicilio.setData(datiDomicilio());
-    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 14) });
-    statoDomicilio.textContent = "Domicilio impostato: " + trovato.place_name;
+    inputIndirizzo.value = trovato.place_name; // l'indirizzo normalizzato restituito dalla API
+    aggiornaDomicilio(lon, lat);
+    statoDomicilio.textContent = "Domicilio aggiornato.";
   });
 };

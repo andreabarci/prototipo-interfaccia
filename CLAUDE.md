@@ -9,13 +9,18 @@
 
 ## Struttura della cartella
 
-- `index.html` · la pagina: tendina sinistra, mappa al centro, tendina destra
-- `css/style.css` · stili (quelli attuali sono provvisori)
+- `index.html` · il livello di presentazione (non è uno strumento): le due schede "Case manager"/"Caregiver" sopra due iframe, una pagina per volta, ciascuna nello stato in cui è stata lasciata. Scorciatoie S (cambia strumento) e H (nasconde/mostra la striscia), attive solo fuori da un campo di testo. Non appartiene a nessuno dei due strumenti: stile inline suo, non `css/style.css`
+- `case-manager.html` · lo strumento del case manager: tendina sinistra, mappa al centro, tendina destra
+- `caregiver.html` · lo strumento del caregiver: tendina sinistra con la proposta, mappa con cerchio dei 15 minuti, tendina destra, riquadro della conversazione
+- `css/style.css` · stili dei due strumenti, condiviso (quelli attuali sono provvisori)
 - `js/config.js` · token di Mapbox, stile e vista iniziale. **Non modificarlo e non stampare mai il token** in chat o nei log
-- `js/gate.js` · schermata con password all'apertura (protezione di cortesia, non di sicurezza)
-- `js/app.js` · logica della mappa; parte da `window.startApp()`, chiamata da gate.js dopo la password
-- `data/` · dati generati, **da non modificare a mano**
+- `js/condiviso.js` · funzioni e costanti comuni a `app.js` e `caregiver.js` (domicilio iniziale, colori, icone, curva dei rami, linee del tempo, fumetto del servizio)
+- `js/gate.js` · schermata con password all'apertura (protezione di cortesia, non di sicurezza); condiviso, ogni pagina chiama `window.startApp()` dopo la password
+- `js/app.js` · logica della mappa del case manager
+- `js/caregiver.js` · logica della mappa del caregiver
+- `data/` · dati generati, **da non modificare a mano** (eccetto `data/scenario-caregiver.json`, scritto a mano: le relazioni inventate dello scenario del caregiver)
 - `strumenti/converti_dati.py` · rigenera `data/` dal file Numbers del modello dati
+- `strumenti/calcola_tempi.py` · rigenera `data/tempi_domicilio_iniziale.json` (tempi di riserva dal domicilio iniziale)
 
 Tecnica: pagina statica, JavaScript senza framework né build, Mapbox GL JS v3.26 da CDN. Si prova con l'estensione Live Server ("Go Live", `http://127.0.0.1:5500`); aprire `index.html` con un doppio clic non carica i dati. Si pubblica con commit e push: GitHub Pages serve il sito su https://andreabarci.github.io/prototipo-tesi/.
 

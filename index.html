@@ -4,57 +4,120 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <title>Prototipo · strumento del case manager</title>
+  <title>Prototipo di tesi · case manager e caregiver</title>
+  <style>
+    /* Livello di presentazione: serve solo a mostrare i due strumenti in sede di discussione della
+       tesi, non appartiene a nessuno dei due (vedi brief-caregiver-claude-code-1.md). Per questo ha
+       uno stile proprio, qui, invece di usare css/style.css. */
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; font: 13px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
 
-  <!-- Mapbox GL JS -->
-  <link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
-  <script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
+    .schede {
+      position: fixed;
+      top: 0; left: 0; right: 0;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 0 12px;
+      background: #f4f5f5;
+      border-bottom: 1px solid #d6dde0;
+      font-size: 11px;
+      color: #5a666e;
+      opacity: .55;
+      transition: opacity .15s ease;
+      z-index: 10;
+    }
+    .schede:hover,
+    .schede:focus-within { opacity: 1; }
+    .schede[hidden] { display: none; }
+    .scheda {
+      font: inherit;
+      font-size: 11px;
+      padding: 2px 0;
+      border: none;
+      background: none;
+      color: inherit;
+      cursor: pointer;
+    }
+    .scheda.attiva { color: #1d2428; text-decoration: underline; text-decoration-thickness: 1.5px; }
 
-  <link href="css/style.css" rel="stylesheet">
+    .pagine { position: fixed; inset: 0; top: 24px; }
+    .pagine.a-tutto-schermo { top: 0; }
+    .pagine iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: none; }
+    .pagine iframe[hidden] { display: none; }
+  </style>
 </head>
-<body class="locked">
-  <div class="gate" id="gate">
-    <form class="gate__box" id="gate-form">
-      <p class="eyebrow">Prototipo di tesi</p>
-      <label for="gate-input">Password</label>
-      <input id="gate-input" type="password" autocomplete="current-password" required>
-      <button type="submit">Entra</button>
-      <p class="gate__error" id="gate-error" hidden>Password non corretta.</p>
-    </form>
+<body>
+  <nav class="schede" id="schede">
+    <button type="button" class="scheda attiva" id="scheda-case-manager" data-strumento="case-manager">Case manager</button>
+    <button type="button" class="scheda" id="scheda-caregiver" data-strumento="caregiver">Caregiver</button>
+  </nav>
+
+  <div class="pagine" id="pagine">
+    <iframe id="iframe-case-manager" title="Case manager" src="case-manager.html"></iframe>
+    <iframe id="iframe-caregiver" title="Caregiver" hidden></iframe>
   </div>
 
-  <div class="app dx-closed" id="app">
-    <aside class="panel panel--sx" id="panel-sx">
-      <p class="eyebrow">Tendina sinistra</p>
-      <p>Cartella della persona e bisogni.</p>
-    </aside>
+  <script>
+    (function () {
+      const schede = document.getElementById("schede");
+      const pagine = document.getElementById("pagine");
+      const iframePerStrumento = {
+        "case-manager": document.getElementById("iframe-case-manager"),
+        "caregiver": document.getElementById("iframe-caregiver"),
+      };
+      const bottonePerStrumento = {
+        "case-manager": document.getElementById("scheda-case-manager"),
+        "caregiver": document.getElementById("scheda-caregiver"),
+      };
+      let strumentoAttivo = "case-manager";
+      let strisciaVisibile = true;
 
-    <main class="stage">
-      <div id="map"></div>
-      <div class="selettore-legame" id="selettore-legame" hidden>
-        <div class="selettore-legame__pulsanti" id="selettore-legame-pulsanti"></div>
-        <p class="selettore-legame__vuoto" id="selettore-legame-vuoto" hidden>Nessun legame di questo tipo</p>
-      </div>
-    </main>
+      // Ciascuna pagina resta nello stato in cui è stata lasciata: non si cambia mai il suo "src"
+      // dopo il primo caricamento, si nasconde solo quella non attiva (vedi il brief). Il caregiver
+      // si carica solo alla prima volta che si apre la sua scheda, non subito: evita due mappe
+      // Mapbox (e due richieste di password) a schermo insieme al primo accesso.
+      function mostraStrumento(nome) {
+        if (nome === strumentoAttivo) return;
+        const iframe = iframePerStrumento[nome];
+        if (!iframe.src) iframe.src = nome + ".html";
+        strumentoAttivo = nome;
+        Object.entries(iframePerStrumento).forEach(([k, el]) => { el.hidden = k !== nome; });
+        Object.entries(bottonePerStrumento).forEach(([k, el]) => el.classList.toggle("attiva", k === nome));
+      }
 
-    <aside class="panel panel--dx" id="panel-dx">
-      <button class="panel__close" id="panel-dx-close" type="button" aria-label="Chiudi la tendina">×</button>
-      <div class="panel__content" id="panel-dx-content">
-        <p class="eyebrow">Tendina destra</p>
-        <p>Servizio selezionato.</p>
-      </div>
-      <!-- Fuori da panel-dx-content apposta: mostraEnte riscrive solo quello sopra, questo blocco
-           resta quando si cambia il tipo di legame senza cambiare ente (vedi aggiornaListaLegami). -->
-      <div class="legami-collegati" id="legami-collegati" hidden>
-        <p class="eyebrow" id="legami-collegati-titolo"></p>
-        <p class="meta" id="legami-collegati-vuoto" hidden></p>
-        <ul class="servizi" id="legami-collegati-lista"></ul>
-      </div>
-    </aside>
-  </div>
+      Object.entries(bottonePerStrumento).forEach(([nome, btn]) => {
+        btn.addEventListener("click", () => mostraStrumento(nome));
+      });
 
-  <script src="js/config.js"></script>
-  <script src="js/app.js"></script>
-  <script src="js/gate.js"></script>
+      function cambiaStrumento() {
+        mostraStrumento(strumentoAttivo === "case-manager" ? "caregiver" : "case-manager");
+      }
+      function alternaStriscia() {
+        strisciaVisibile = !strisciaVisibile;
+        schede.hidden = !strisciaVisibile;
+        pagine.classList.toggle("a-tutto-schermo", !strisciaVisibile);
+      }
+
+      // Scorciatoie di riserva (S cambia strumento, H nasconde/mostra la striscia), attive solo
+      // quando il cursore non è in un campo di testo — installate sia sulla finestra del contenitore
+      // sia su quella di ciascun iframe (stessa origine: Mapbox le considera pagine diverse, i tasti
+      // altrimenti funzionerebbero solo finché non si clicca dentro una mappa).
+      function installaScorciatoie(finestra) {
+        finestra.addEventListener("keydown", (ev) => {
+          const attivo = finestra.document.activeElement;
+          const inCampoTesto = attivo && (attivo.tagName === "INPUT" || attivo.tagName === "TEXTAREA" || attivo.isContentEditable);
+          if (inCampoTesto) return;
+          const tasto = ev.key.toLowerCase();
+          if (tasto === "s") cambiaStrumento();
+          else if (tasto === "h") alternaStriscia();
+        });
+      }
+      installaScorciatoie(window);
+      iframePerStrumento["case-manager"].addEventListener("load", () => installaScorciatoie(iframePerStrumento["case-manager"].contentWindow));
+      iframePerStrumento["caregiver"].addEventListener("load", () => installaScorciatoie(iframePerStrumento["caregiver"].contentWindow));
+    })();
+  </script>
 </body>
 </html>

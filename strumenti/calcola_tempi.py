@@ -20,7 +20,7 @@ import urllib.request
 from pathlib import Path
 
 RADICE = Path(__file__).resolve().parent.parent
-DOMICILIO = (9.1385, 45.4809)  # (lon, lat) — deve combaciare con DOMICILIO in js/app.js
+DOMICILIO = (9.1370, 45.4965)  # (lon, lat) — deve combaciare con DOMICILIO in js/app.js
 GRUPPO = 24  # enti per richiesta: +1 (il domicilio) = 25, il massimo della Matrix API
 
 

@@ -1,0 +1,32 @@
+{
+  "nota": "Dati inventati per lo scenario A del caregiver (vedi brief-caregiver-claude-code-1.md). Non fa parte del modello dati: non va toccato da strumenti/converti_dati.py.",
+  "proposti": [
+    { "gruppo": "padre", "servizio": "O0205", "ente": "E273" },
+    { "gruppo": "padre", "servizio": "O0165", "ente": "E253" },
+    { "gruppo": "figlio", "servizio": "O0160-2", "ente": "E250" },
+    { "gruppo": "figlio", "servizio": "O0054", "ente": "E045" }
+  ],
+  "relazioni": [
+    {
+      "da": "E273",
+      "simili": [
+        { "servizio": "O0165", "ente": "E253" },
+        { "servizio": "O0177", "ente": "E259" }
+      ],
+      "anche_per_te": [
+        { "servizio": "O0160-2", "ente": "E250" },
+        { "servizio": "O0054", "ente": "E045" },
+        { "servizio": "O0361@E203", "ente": "E203" }
+      ]
+    }
+  ],
+  "conversazione": {
+    "domanda": "Cerco qualcosa vicino a casa per far muovere un po' mio padre e fargli incontrare altre persone.",
+    "bisogni": ["B05", "B16"],
+    "etichette_bisogni": ["Attività diurne · movimento", "Compagnia"],
+    "risultati": [
+      { "nome": "Boldinasco", "ente": "E359", "servizi": ["O0326", "O0327"] },
+      { "nome": "Parco Montestella", "ente": "E357", "servizi": ["O0322", "O0323"] }
+    ]
+  }
+}

@@ -1,14 +1,16 @@
-# Prototipo · strumento del case manager
+# Prototipo · strumenti cartografici del case manager e del caregiver
 
-Prototipo esemplificativo della tesi magistrale in Design della Comunicazione (Politecnico di Milano, 2026). Mostra lo scenario A dello strumento cartografico per il case manager. Tutti i dati sono di esempio.
+Prototipo esemplificativo della tesi magistrale in Design della Comunicazione (Politecnico di Milano, 2026). Mostra lo scenario A di due strumenti cartografici collegati: quello del case manager e quello del caregiver. Tutti i dati sono di esempio.
 
 ## Struttura
 
-- `index.html` · la pagina
-- `css/style.css` · stili
+- `index.html` · il livello di presentazione: le due schede per passare da uno strumento all'altro
+- `case-manager.html` / `caregiver.html` · i due strumenti, ciascuno nel suo iframe
+- `css/style.css` · stili dei due strumenti (quelli di `index.html` sono inline, è una pagina a parte)
 - `js/config.js` · token di Mapbox, stile e vista iniziale
-- `js/app.js` · logica della mappa
-- `data/` · dati in GeoJSON (solo dati di esempio, il repository è pubblico)
+- `js/condiviso.js` · funzioni comuni ai due strumenti
+- `js/app.js` / `js/caregiver.js` · logica di ciascuno strumento
+- `data/` · dati in JSON (solo dati di esempio, il repository è pubblico)
 
 ## Lavorare in locale
 

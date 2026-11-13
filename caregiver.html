@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Prototipo · strumento del caregiver</title>
+
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
+
+  <link href="css/style.css" rel="stylesheet">
+</head>
+<body class="locked">
+  <div class="gate" id="gate">
+    <form class="gate__box" id="gate-form">
+      <p class="eyebrow">Prototipo di tesi</p>
+      <label for="gate-input">Password</label>
+      <input id="gate-input" type="password" autocomplete="current-password" required>
+      <button type="submit">Entra</button>
+      <p class="gate__error" id="gate-error" hidden>Password non corretta.</p>
+    </form>
+  </div>
+
+  <div class="app dx-closed" id="app">
+    <aside class="panel panel--sx" id="panel-sx">
+      <p class="eyebrow">Tendina sinistra</p>
+      <p>La proposta del case manager.</p>
+    </aside>
+
+    <main class="stage">
+      <div id="map"></div>
+      <div class="conversazione" id="conversazione">
+        <div class="conversazione__risposta" id="conversazione-risposta" hidden></div>
+        <form class="conversazione__form" id="conversazione-form">
+          <input type="text" id="conversazione-input"
+            value="Cerco qualcosa vicino a casa per far muovere un po' mio padre e fargli incontrare altre persone.">
+          <button type="submit">Invia</button>
+        </form>
+      </div>
+    </main>
+
+    <aside class="panel panel--dx" id="panel-dx">
+      <button class="panel__close" id="panel-dx-close" type="button" aria-label="Chiudi la tendina">×</button>
+      <div class="panel__content" id="panel-dx-content">
+        <p class="eyebrow">Tendina destra</p>
+        <p>Il luogo selezionato.</p>
+      </div>
+    </aside>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/condiviso.js"></script>
+  <script src="js/caregiver.js"></script>
+  <script src="js/gate.js"></script>
+</body>
+</html>

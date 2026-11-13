@@ -383,3 +383,119 @@ body.locked .app { visibility: hidden; }
    vedi --ramo-colore-riposo/aggiornaFrecceAdiacenza, perché non è lo stesso grigio delle linee del
    tempo anche se simile. */
 .freccia-adiacenza { color: var(--ramo-colore-riposo, #aab1b6); pointer-events: none; }
+
+/* ---------- Pagina del caregiver (js/caregiver.js) ---------- */
+/* Markup e colori provvisori: Andrea deciderà la grafica dei cinque stati dei marker (proposto per
+   il padre, proposto per il figlio, scoperto, selezionato, attenuato — vedi il brief del caregiver)
+   quando saranno tutti a schermo. Qui per ora solo le voci della tendina sinistra. */
+.proposta-gruppo { margin-top: 20px; }
+.proposta-gruppo:first-child { margin-top: 16px; }
+.proposta-voce {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  padding: 8px;
+  margin: 0 -8px;
+  border: none;
+  border-radius: 4px;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.proposta-voce:hover,
+.proposta-voce.in-evidenza { background: var(--bg); }
+.proposta-voce__servizio { display: block; font-weight: 600; }
+.proposta-voce__ente { display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
+.proposta-voce__tempo { display: block; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+
+/* Tendina destra del caregiver: selettore delle relazioni (due voci, non quattro come nel case
+   manager — vedi Esplorare a/b nel brief), dentro il pannello e non sovrapposto alla mappa. */
+.selettore-relazioni { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+.selettore-relazioni__pulsante {
+  font: inherit;
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--ink);
+  cursor: pointer;
+}
+.selettore-relazioni__pulsante:hover { background: var(--bg); }
+.selettore-relazioni__pulsante.attivo { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+
+/* Riquadro della conversazione (Conversare a/b nel brief): in basso sulla mappa, a riposo finché
+   non si scrive. Markup e colori provvisori. */
+.conversazione {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  width: min(92%, 560px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1;
+}
+.conversazione__risposta {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .1);
+}
+.conversazione__risposta.scrivendo { color: var(--ink-2); font-style: italic; }
+.conversazione__risposta p { margin: 0; }
+.conversazione__bisogni { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+.conversazione__bisogno {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.conversazione__nome {
+  font: inherit;
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.conversazione__nome:hover { background: var(--bg); }
+.conversazione__nome.evidenziato { font-weight: 700; background: var(--bg); border-radius: 3px; }
+.conversazione__form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 4px 4px 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .1);
+}
+.conversazione__form input {
+  flex: 1;
+  border: none;
+  background: none;
+  font: inherit;
+  padding: 9px 0;
+  color: var(--ink);
+}
+.conversazione__form input:focus { outline: none; }
+.conversazione__form button {
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 18px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--panel);
+  cursor: pointer;
+}
+.conversazione__form button:disabled { opacity: .5; cursor: default; }

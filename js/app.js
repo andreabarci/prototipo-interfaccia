@@ -4,11 +4,9 @@
 // Grafica provvisoria: colori, forme e testi verranno progettati dopo.
 
 // La mappa parte solo dopo la password (vedi js/gate.js).
-// Colori provvisori per macrodominio (da ridisegnare)
-const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8a7f" };
-// Colore di riserva (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css), usato solo se
-// un ente scelto dentro un cluster non ha un macrodominio riconosciuto.
-const COLORE_CLUSTER = "#5a666e";
+// COLORI, COLORE_CLUSTER, ICONA_PER_CATEGORIA, caricaImmagine, RAMO_CURVATURA/RAMO_CAMPIONI/
+// campionaCurva e DOMICILIO_INIZIALE sono in js/condiviso.js, comune con la pagina del caregiver.
+
 // Opacità dei marker non pertinenti al bisogno scelto (attenuati, non spariscono). Riusata anche nel
 // percorso per i marker che non ricevono un ramo di equivalenza.
 const OPACITA_ATTENUATA = 0.1;
@@ -65,8 +63,7 @@ const RAMO_SPESSORE_HOVER = 1.75;
 const RAMO_OPACITA = 0.9; // a riposo
 const RAMO_OPACITA_HOVER = 1; // il ramo in evidenza
 const RAMO_OPACITA_SPENTO = 0.15; // tutti gli altri, mentre uno è in evidenza (per leggere le etichette)
-const RAMO_CURVATURA = 0.15; // spostamento del punto di controllo, in percentuale della lunghezza del ramo
-const RAMO_CAMPIONI = 40; // punti con cui si disegna la curva
+// RAMO_CURVATURA e RAMO_CAMPIONI sono in js/condiviso.js (li usa campionaCurva, anch'essa condivisa).
 const RAMO_FASCIA_HOVER = 12; // larghezza in px dell'area sensibile invisibile sotto il ramo
 const DISSOLVENZA_MS = 200; // durata della dissolvenza: comparsa dei rami, attenuazione dei marker
 
@@ -79,16 +76,8 @@ const ADIACENZA_TRATTO_VUOTO = 3; // px
 const ADIACENZA_MASSIMO = 5; // al massimo i N più vicini per tempo a piedi dal domicilio
 const ADIACENZA_FRECCIA_DIMENSIONE = 8; // px
 
-// Linee del tempo (domicilio → marker), in hover su un ramo: rette (mai curve, per non confondersi
-// con i rami, che sono curvi), tratteggiate, sottili, colore neutro — natura diversa dai rami anche
-// nel disegno, non solo nel significato. Le etichette con icona e minuti arrivano in un passo dopo.
-const TEMPO_LINEA_COLORE = "#8a9299"; // grigio medio, neutro
-const TEMPO_LINEA_SPESSORE = 1.5;
-const TEMPO_LINEA_OPACITA = 0.9;
-const TEMPO_LINEA_TRATTO_PIENO = 4; // px
-const TEMPO_LINEA_TRATTO_VUOTO = 4; // px
-const TEMPO_LINEA_MARGINE = 4; // oltre al raggio del marker, perché non tocchi il bordo/l'icona
-const TEMPO_LINEA_DISSOLVENZA_MS = 150;
+// TEMPO_LINEA_*, puntoAlBordo, segmentoLineaTempo, iconaPersonaCheCammina e pillolaTempoHtml sono in
+// js/condiviso.js, comune con la pagina del caregiver.
 
 // I quattro tipi di legame fra servizi (vedi CLAUDE.md): non c'è un campo nei dati che li identifica
 // già, sono id scelti qui. Equivalenza è l'unico con una regola di calcolo decisa (vedi trovaLegami);
@@ -100,87 +89,14 @@ const TIPI_LEGAME = [
   { id: "incompatibilita", etichetta: "Incompatibilità" },
 ];
 
-// Icona per categoria_origine dell'ente (non la categoria semplificata), dalla cartella icons/.
-// Mappatura provvisoria: più categorie di origine possono condividere la stessa icona.
-const ICONA_PER_CATEGORIA = {
-  "Associazione": "associazione",
-  "Associazione / terzo settore": "associazione",
-  "Associazione di promozione sociale": "associazione",
-  "Associazione sportiva dilettantistica": "palestra",
-  "Biblioteca comunale": "biblioteca",
-  "CDI - Centro Diurno Integrato": "centro-diurno",
-  "Casa di Comunità": "poliambulatorio",
-  "Casa di cura / CDCD": "ospedale",
-  "Centri di Incontro e Supporto": "centro-di-ascolto",
-  "Centro culturale/terapeutico": "centro-culturale-terapeutico",
-  "Centro socio-ricreativo": "centro-socio-ricreativo",
-  "Consultorio familiare privato": "consultorio",
-  "Consultorio familiare pubblico": "consultorio",
-  "Cooperativa sociale": "cooperativa",
-  "Ente gestore ADI": "sportello-locale",
-  "Erogatore di servizi": "sportello-locale",
-  "Fondazione / CDCD": "ospedale",
-  "Fondazione / terzo settore": "associazione",
-  "Gruppo di cammino ATS": "gdc",
-  "IRCCS / CDCD": "ospedale",
-  "Istituto geriatrico / CDCD": "ospedale",
-  "Ospedale": "ospedale",
-  "Ospedale / CDCD": "ospedale",
-  "Patronato / CAF": "sportello-locale",
-  "Patronato / terzo settore": "sportello-locale",
-  "Poliambulatorio territoriale": "poliambulatorio",
-  "Presidio ospedaliero ambulatoriale": "poliambulatorio",
-  "RSA - Residenza Sanitaria Assistenziale": "rsa",
-  "Rete parrocchiale / terzo settore": "associazione",
-  "Servizi Sociali Professionali Territoriali (SSPT)": "sportello-locale",
-  "Servizio comunale / rete": "sportello-locale",
-  "Servizio privato": "sportello-locale",
-  "Servizio pubblico": "sportello-locale",
-  "URP - Ufficio Relazioni con il Pubblico": "sportello-locale",
-};
-
 // Bisogni della cartella di questa persona (scenario A, vedi CLAUDE.md):
 // B16 Compagnia e relazioni sociali (persona), C02 sofferenza psicologica (caregiver).
 const BISOGNI_CARTELLA = ["B16", "C02"];
 
-// Carica un'immagine da un indirizzo; usato per le icone di categoria (più semplice e sicuro di
-// map.loadImage, che a seconda della versione di Mapbox restituisce forme diverse della risposta).
-function caricaImmagine(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error("Immagine non trovata: " + url));
-    img.src = url;
-  });
-}
-
-// Punto intermedio di una curva di Bézier quadratica: il punto di controllo è spostato in
-// perpendicolare al segmento p0→p1, dal lato "destro" (senso orario visto da p0), di RAMO_CURVATURA
-// volte la lunghezza del segmento. Restituisce RAMO_CAMPIONI punti campionati lungo la curva.
-function campionaCurva(p0, p1) {
-  const dx = p1[0] - p0[0];
-  const dy = p1[1] - p0[1];
-  const lunghezza = Math.hypot(dx, dy) || 1;
-  const px = dy / lunghezza; // perpendicolare normalizzata, ruotata di -90°
-  const py = -dx / lunghezza;
-  const cx = (p0[0] + p1[0]) / 2 + px * lunghezza * RAMO_CURVATURA;
-  const cy = (p0[1] + p1[1]) / 2 + py * lunghezza * RAMO_CURVATURA;
-  const punti = [];
-  for (let i = 0; i < RAMO_CAMPIONI; i++) {
-    const t = i / (RAMO_CAMPIONI - 1);
-    const u = 1 - t;
-    punti.push([
-      u * u * p0[0] + 2 * u * t * cx + t * t * p1[0],
-      u * u * p0[1] + 2 * u * t * cy + t * t * p1[1],
-    ]);
-  }
-  return punti;
-}
-
-// Domicilio inventato, zona Monte Stella / QT8 — Municipio 8 di Milano.
-// Non corrisponde a un indirizzo reale: vedi la regola sui dati in CLAUDE.md.
-// Si può spostare scrivendo un indirizzo nella tendina sinistra.
-let DOMICILIO = { lat: 45.4809, lon: 9.1385 };
+// Domicilio inventato, tra Boldinasco e Villapizzone — Municipio 8 di Milano (DOMICILIO_INIZIALE,
+// in js/condiviso.js, condiviso con la pagina del caregiver). Non corrisponde a un indirizzo reale:
+// vedi la regola sui dati in CLAUDE.md. Qui può spostarsi scrivendo un indirizzo nella tendina sinistra.
+let DOMICILIO = { ...DOMICILIO_INIZIALE };
 
 window.startApp = async function () {
   // Costanti della tendina a bisogni passate al CSS, così restano tutte in cima a questo file.
@@ -431,36 +347,17 @@ window.startApp = async function () {
     const idRichiesta = ++richiestaTempiCorrente;
     for (const e of sulla_mappa) tempiPerEnte[e.id] = { stato: "calcolo" };
 
-    const GRUPPO = 24; // + il domicilio = 25, il massimo della Matrix API
-    for (let i = 0; i < sulla_mappa.length; i += GRUPPO) {
-      const gruppo = sulla_mappa.slice(i, i + GRUPPO);
-      const coordinate = [[lon, lat], ...gruppo.map((e) => [e.lon, e.lat])]
-        .map(([lo, la]) => lo + "," + la).join(";");
-      const url = "https://api.mapbox.com/directions-matrix/v1/mapbox/walking/" + coordinate
-        + "?sources=0&annotations=duration,distance&access_token=" + CONFIG.mapboxToken;
-      try {
-        const risposta = await fetch(url);
-        const dati = await risposta.json();
-        if (idRichiesta !== richiestaTempiCorrente) return; // il domicilio è cambiato di nuovo nel frattempo
-        if (dati.code !== "Ok") throw new Error(dati.code);
-        const durate = dati.durations[0];
-        const distanze = dati.distances[0];
-        gruppo.forEach((e, idx) => {
-          const durata = durate[idx + 1];
-          tempiPerEnte[e.id] = durata == null
-            ? { stato: "errore" } // irraggiungibile a piedi secondo il routing
-            : { stato: "ok", minuti: Math.round(durata / 60), metri: Math.round(distanze[idx + 1]) };
-        });
-      } catch (err) {
-        if (idRichiesta !== richiestaTempiCorrente) return;
-        console.warn("Tempi a piedi non calcolati per un gruppo di enti:", err.message);
-        gruppo.forEach((e) => {
-          tempiPerEnte[e.id] = (origineIniziale && tempiRiserva[e.id])
-            ? { stato: "ok", ...tempiRiserva[e.id] }
-            : { stato: "errore" };
-        });
-      }
-    }
+    // richiediTempiAPiedi (js/condiviso.js) fa le richieste a gruppi di 24 alla Matrix API.
+    const risultati = await richiediTempiAPiedi(
+      [lon, lat], sulla_mappa.map((e) => [e.lon, e.lat]), CONFIG.mapboxToken
+    );
+    if (idRichiesta !== richiestaTempiCorrente) return; // il domicilio è cambiato di nuovo nel frattempo
+    sulla_mappa.forEach((e, idx) => {
+      const r = risultati[idx];
+      tempiPerEnte[e.id] = (r.stato === "errore" && origineIniziale && tempiRiserva[e.id])
+        ? { stato: "ok", ...tempiRiserva[e.id] }
+        : r;
+    });
   }
   calcolaTempi(DOMICILIO.lat, DOMICILIO.lon, true);
 
@@ -1049,32 +946,6 @@ window.startApp = async function () {
       return RAGGIO_GRANDE[10] + (RAGGIO_GRANDE[14] - RAGGIO_GRANDE[10]) * t; // sempre "grande", mai in hover
     }
 
-    // Il punto sul segmento coordCentro→coordAltro, spostato di raggioPx pixel verso l'altro
-    // estremo: è dove la linea deve iniziare o fermarsi, al bordo del marker e non al centro.
-    function puntoAlBordo(coordCentro, coordAltro, raggioPx) {
-      const p0 = map.project(coordCentro);
-      const p1 = map.project(coordAltro);
-      const dx = p1.x - p0.x, dy = p1.y - p0.y;
-      const lunghezza = Math.hypot(dx, dy) || 1;
-      const fattore = Math.min(raggioPx / lunghezza, 0.49); // mai oltre la metà, se i marker si toccano
-      const lngLat = map.unproject([p0.x + dx * fattore, p0.y + dy * fattore]);
-      return [lngLat.lng, lngLat.lat];
-    }
-
-    function segmentoLineaTempo(coordA, raggioA, coordB, raggioB) {
-      return {
-        type: "Feature",
-        geometry: {
-          type: "LineString",
-          coordinates: [
-            puntoAlBordo(coordA, coordB, raggioA + TEMPO_LINEA_MARGINE),
-            puntoAlBordo(coordB, coordA, raggioB + TEMPO_LINEA_MARGINE),
-          ],
-        },
-        properties: {},
-      };
-    }
-
     // Stesso schema di mostraRami/nascondiRami: "comparso" parte falso, passa a vero un istante
     // dopo, così la comparsa è una dissolvenza; alla sparizione si aspetta la dissolvenza prima di
     // svuotare davvero i dati.
@@ -1109,19 +980,6 @@ window.startApp = async function () {
       if (!t || t.stato === "calcolo") return "…";
       if (t.stato === "errore") return "—";
       return t.minuti + " min";
-    }
-
-    // Icona provvisoria, semplice: una persona stilizzata che cammina (testa + tronco + gambe e
-    // braccia divaricate). Eredita il colore di testo dell'etichetta (currentColor).
-    function iconaPersonaCheCammina() {
-      return '<svg viewBox="0 0 24 24" width="10" height="10" aria-hidden="true">'
-        + '<circle cx="12" cy="4" r="2.2" fill="currentColor"/>'
-        + '<path d="M12 7 L12 14 M12 14 L8 20 M12 14 L16 19 M12 9 L7 12 M12 9 L17 11" '
-        + 'stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/>'
-        + '</svg>';
-    }
-    function pillolaTempoHtml(testo) {
-      return iconaPersonaCheCammina() + `<span class="pillola-tempo__testo">${testo}</span>`;
     }
 
     // Le due etichette, una per linea: pronte dall'avvio, invisibili finché non servono (vedi CSS
@@ -1205,16 +1063,7 @@ window.startApp = async function () {
       anchor: "bottom", offset: 14, className: "popup-servizio",
     });
 
-    // Contenuto dei due fumetti sopra: servizio al primo posto, sotto l'ente che lo ospita ("presso",
-    // in grigio chiaro, + il nome nel colore del suo macrodominio). Stesso markup per entrambi.
-    function fumettoServizio(servizio, ente) {
-      const colore = COLORI[ente.macro_dominio] || COLORE_CLUSTER;
-      return `<strong class="fumetto-servizio__titolo">${servizio.titolo || "Servizio"}</strong>`
-        + `<span class="fumetto-servizio__ente">`
-        + `<span class="fumetto-servizio__presso">presso</span> `
-        + `<span style="color:${colore}">${ente.nome}</span>`
-        + `</span>`;
-    }
+    // fumettoServizio è in js/condiviso.js, comune con la pagina del caregiver.
 
     // Hover su un ramo o sul marker che collega: il ramo passa in primo piano (più scuro, più
     // spesso), tutti gli altri rami si attenuano ulteriormente per non affollare la lettura delle
@@ -1258,12 +1107,12 @@ window.startApp = async function () {
       if (scelto !== null && gruppiArray[scelto]) {
         const coordOrigine = [gruppiArray[scelto][0].lon, gruppiArray[scelto][0].lat];
         const raggioOrigine = raggioMarkerPx(scelto, zoom, markerInEvidenza === scelto);
-        segOrigine = segmentoLineaTempo(coordDomicilio, raggioDomicilio, coordOrigine, raggioOrigine);
+        segOrigine = segmentoLineaTempo(map, coordDomicilio, raggioDomicilio, coordOrigine, raggioOrigine);
         const servizioOrigine = servizioSelezionatoId ? servizioById[servizioSelezionatoId] : null;
         if (servizioOrigine) testoOrigine = testoEtichettaTempo(servizioOrigine.sede);
       }
       const raggioDestinazione = raggioMarkerPx(dest.featureId, zoom, true);
-      const segDestinazione = segmentoLineaTempo(coordDomicilio, raggioDomicilio, dest.coord, raggioDestinazione);
+      const segDestinazione = segmentoLineaTempo(map, coordDomicilio, raggioDomicilio, dest.coord, raggioDestinazione);
       const testoDestinazione = testoEtichettaTempo(dest.sedeId);
 
       mostraLineeTempo(segOrigine ? [segOrigine, segDestinazione] : [segDestinazione]);

@@ -1,11 +1,17 @@
 {
-  "nota": "Dati inventati per lo scenario A del caregiver (vedi brief-caregiver-claude-code-1.md). Non fa parte del modello dati: non va toccato da strumenti/converti_dati.py.",
-  "proposti": [
-    { "gruppo": "padre", "servizio": "O0205", "ente": "E273" },
-    { "gruppo": "padre", "servizio": "O0165", "ente": "E253" },
-    { "gruppo": "figlio", "servizio": "O0160-2", "ente": "E250" },
-    { "gruppo": "figlio", "servizio": "O0054", "ente": "E045" }
-  ],
+  "nota": "Dati inventati per lo scenario A del caregiver (vedi brief-caregiver-claude-code-2.md). Scritto a mano, non fa parte del modello dati: strumenti/converti_dati.py non lo tocca. Nei testi della chat, [[E359|Boldinasco]] è un nome cliccabile (id ente | testo) e {{E359}} sono i minuti a piedi dal domicilio a quell'ente.",
+  "salvati": ["O0370@E027", "O0127-1"],
+  "pacchetto_case_manager": {
+    "titolo": "Dal case manager",
+    "data": "10 novembre 2026",
+    "commento": "Ti ho segnato due gruppi di lettura vicino a casa, dove tuo padre può passare del tempo in compagnia, e due possibilità di sostegno pensate per te. Ne parliamo al prossimo incontro.",
+    "servizi": [
+      { "servizio": "O0205", "bisogno": "B16" },
+      { "servizio": "O0165", "bisogno": "B16" },
+      { "servizio": "O0160-2", "bisogno": "C02" },
+      { "servizio": "O0054", "bisogno": "C02" }
+    ]
+  },
   "relazioni": [
     {
       "da": "E273",
@@ -20,13 +26,32 @@
       ]
     }
   ],
-  "conversazione": {
+  "chat": {
     "domanda": "Cerco qualcosa vicino a casa per far muovere un po' mio padre e fargli incontrare altre persone.",
-    "bisogni": ["B05", "B16"],
-    "etichette_bisogni": ["Attività diurne · movimento", "Compagnia"],
-    "risultati": [
-      { "nome": "Boldinasco", "ente": "E359", "servizi": ["O0326", "O0327"] },
-      { "nome": "Parco Montestella", "ente": "E357", "servizi": ["O0322", "O0323"] }
+    "data": "15 novembre 2026",
+    "fonte": "Dal repertorio dei servizi del territorio · gruppi di cammino ATS Milano",
+    "risposte": [
+      {
+        "id": "principale",
+        "etichette": ["B05", "B16"],
+        "testo": "Vicino a casa ci sono tre gruppi di cammino guidati da un volontario formato dall'ATS: a [[E359|Boldinasco]], a circa {{E359}} minuti a piedi, al [[E358|Centro Ricreativo Culturale 77]] di via Sapri, a circa {{E358}}, e al [[E357|Parco Montestella]], a circa {{E357}}. Sono camminate di gruppo all'aperto, che uniscono il movimento allo stare in compagnia.",
+        "paragrafo": "Hai cercato attività vicino a casa per far muovere tuo padre e fargli incontrare altre persone. Sono emersi tre gruppi di cammino, il più vicino a Boldinasco.",
+        "servizi": ["O0326", "O0327", "O0324", "O0325", "O0322", "O0323"]
+      },
+      {
+        "id": "senza_B16",
+        "etichette": ["B05"],
+        "testo": "Se cerchi soprattutto un modo per far muovere tuo padre, oltre ai gruppi di cammino c'è il [[E344|Centro Aldini]], a circa {{E344}} minuti a piedi, che propone ginnastica dolce, yoga e balli di gruppo, con iscrizione.",
+        "paragrafo": "Hai cercato attività vicino a casa per far muovere tuo padre. Oltre ai gruppi di cammino, è emerso il Centro Aldini.",
+        "servizi": ["O0326", "O0324", "O0322", "O0296"]
+      },
+      {
+        "id": "senza_B05",
+        "etichette": ["B16"],
+        "testo": "Se cerchi soprattutto occasioni di compagnia, i gruppi di cammino restano le più vicine. A circa {{E203}} minuti c'è anche il [[E203|centro diurno Simone de' Beauvoir]], dove tuo padre potrebbe passare la giornata con altre persone, con assistenza e attività di animazione; il servizio è a pagamento.",
+        "paragrafo": "Hai cercato occasioni di compagnia per tuo padre vicino a casa. Oltre ai gruppi di cammino, è emerso il centro diurno Simone de' Beauvoir.",
+        "servizi": ["O0327", "O0325", "O0323", "O0360@E203"]
+      }
     ]
   }
 }

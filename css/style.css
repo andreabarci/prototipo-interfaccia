@@ -384,118 +384,206 @@ body.locked .app { visibility: hidden; }
    tempo anche se simile. */
 .freccia-adiacenza { color: var(--ramo-colore-riposo, #aab1b6); pointer-events: none; }
 
-/* ---------- Pagina del caregiver (js/caregiver.js) ---------- */
-/* Markup e colori provvisori: Andrea deciderà la grafica dei cinque stati dei marker (proposto per
-   il padre, proposto per il figlio, scoperto, selezionato, attenuato — vedi il brief del caregiver)
-   quando saranno tutti a schermo. Qui per ora solo le voci della tendina sinistra. */
-.proposta-gruppo { margin-top: 20px; }
-.proposta-gruppo:first-child { margin-top: 16px; }
-.proposta-voce {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  padding: 8px;
-  margin: 0 -8px;
-  border: none;
-  border-radius: 4px;
-  background: none;
-  color: var(--ink);
+/* ---------- Pagina del caregiver (caregiver.html, js/caregiver.js) ---------- */
+/* Tutta la grafica qui sotto è provvisoria: la decide Andrea (vedi brief-caregiver-claude-code-2.md).
+   I colori e le forme dei marker sulla mappa sono invece in cima a js/caregiver.js. */
+
+/* Impianto: chat a sinistra (comprimibile), mappa al centro, tendina destra sempre aperta. */
+.app--caregiver { grid-template-columns: 320px minmax(0, 1fr) 340px; }
+.app--caregiver.sx-chiusa { grid-template-columns: 44px minmax(0, 1fr) 340px; }
+@media (max-width: 900px) {
+  .app--caregiver, .app--caregiver.sx-chiusa { grid-template-columns: 1fr; }
+}
+
+/* Contenitore della pillola del tempo a piedi: non deve mai intercettare il mouse (Mapbox gli scrive
+   pointer-events in linea, per questo !important). */
+.pillola-contenitore { pointer-events: none !important; }
+
+/* Pillola del raggio del quartiere: in basso, sempre al centro orizzontale della mappa (fra il logo
+   di Mapbox a sinistra e il pulsante «i» delle note a destra). Al cambio di raggio la vista si
+   ricentra sul domicilio, che le finisce sopra. */
+.raggio {
+  position: absolute; left: 50%; bottom: 21px; z-index: 1;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px;
+  padding: 3px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, .1);
+  font-size: 12px; color: var(--ink);
+}
+.raggio__valore { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; white-space: nowrap; }
+.raggio__valore svg { color: var(--ink-2); }
+.raggio__passo {
+  width: 24px; height: 24px; padding: 0;
+  border: none; border-radius: 50%; background: none;
+  font: inherit; font-size: 15px; line-height: 1; color: var(--ink); cursor: pointer;
+}
+.raggio__passo:hover { background: var(--bg); }
+.raggio__passo.al-limite { color: var(--line); } /* all'estremo: resta cliccabile ma non fa nulla */
+.raggio__passo.al-limite:hover { background: none; }
+
+/* Chat */
+.chat { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.chat__testata { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 16px; }
+.chat__testata .eyebrow { margin: 0; }
+.chat__comprimi {
+  width: 24px; height: 24px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 50%;
+  background: var(--panel); color: var(--ink-2);
+  font-size: 14px; line-height: 1; cursor: pointer;
+}
+.chat__comprimi:hover { background: var(--bg); color: var(--ink); }
+.sx-chiusa .chat__testata { justify-content: center; padding: 12px 8px; }
+.sx-chiusa .chat__testata .eyebrow,
+.sx-chiusa .chat__scambio,
+.sx-chiusa .chat__barra { display: none; }
+
+.chat__scambio { flex: 1; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
+.chat-msg { font-size: 13px; line-height: 1.5; }
+.chat-msg p { margin: 0; }
+.chat-msg--utente {
+  align-self: flex-end; max-width: 88%;
+  padding: 8px 12px;
+  background: var(--bg); border: 1px solid var(--line); border-radius: 12px 12px 2px 12px;
+}
+
+/* Tre puntini di attesa prima della risposta */
+.chat-attesa { display: inline-flex; gap: 4px; padding: 6px 0; }
+.chat-attesa i { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-2); animation: chat-attesa 1s infinite ease-in-out; }
+.chat-attesa i:nth-child(2) { animation-delay: .15s; }
+.chat-attesa i:nth-child(3) { animation-delay: .3s; }
+@keyframes chat-attesa { 0%, 80%, 100% { opacity: .2; } 40% { opacity: .85; } }
+
+/* Nomi dei servizi nella risposta: cliccabili, con il segnalibro accanto */
+.chat-nome { white-space: nowrap; }
+.chat-nome__testo {
+  font: inherit; font-weight: 600;
+  padding: 0 2px; border: none; border-radius: 3px;
+  background: none; color: var(--ink);
+  text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 2px;
   cursor: pointer;
 }
-.proposta-voce:hover,
-.proposta-voce.in-evidenza { background: var(--bg); }
-.proposta-voce__servizio { display: block; font-weight: 600; }
-.proposta-voce__ente { display: block; font-size: 12px; color: var(--ink-2); margin-top: 2px; }
-.proposta-voce__tempo { display: block; font-size: 11px; color: var(--ink-2); margin-top: 2px; }
+.chat-nome__testo:hover,
+.chat-nome.in-evidenza .chat-nome__testo { background: var(--bg); }
+.chat-nome.evidenziato .chat-nome__testo { background: var(--ink); color: var(--panel); text-decoration: none; }
 
-/* Tendina destra del caregiver: selettore delle relazioni (due voci, non quattro come nel case
-   manager — vedi Esplorare a/b nel brief), dentro il pannello e non sovrapposto alla mappa. */
-.selettore-relazioni { display: flex; gap: 6px; margin-top: 16px; flex-wrap: wrap; }
+.segnalibro {
+  display: inline-flex; vertical-align: -2px;
+  padding: 0 2px; border: none; background: none;
+  color: var(--ink-2); cursor: pointer;
+}
+.segnalibro:hover { color: var(--ink); }
+.segnalibro.salvato { color: var(--ink); cursor: default; }
+
+/* Etichette dei bisogni interpretati (voci CANE), con la × per toglierle */
+.chat-etichette { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chat-etichetta {
+  display: inline-flex; align-items: center; gap: 2px;
+  padding: 3px 10px; font-size: 11px;
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg); color: var(--ink);
+}
+.chat-etichetta:has(.chat-etichetta__togli) { padding-right: 4px; }
+.chat-etichetta__togli {
+  padding: 0 3px; border: none; background: none;
+  font-size: 13px; line-height: 1; color: var(--ink-2); cursor: pointer;
+}
+.chat-etichetta__togli:hover { color: var(--ink); }
+.chat-msg__fonte { margin-top: 8px !important; font-size: 10px; color: var(--ink-2); }
+
+/* Barra di testo in fondo alla chat */
+.chat__barra {
+  display: flex; align-items: center; gap: 6px;
+  margin: 0 12px 12px; padding: 4px 4px 4px 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+}
+.chat__barra input { flex: 1; min-width: 0; padding: 8px 0; border: none; background: none; font: inherit; color: var(--ink); }
+.chat__barra input::placeholder { color: #9aa3a8; }
+.chat__barra input:focus { outline: none; }
+.chat__barra button {
+  width: 32px; height: 32px; flex: none;
+  border: none; border-radius: 50%;
+  background: var(--ink); color: var(--panel); font-size: 15px; cursor: pointer;
+}
+.chat__barra input:disabled,
+.chat__barra button:disabled { opacity: .45; cursor: default; }
+
+/* Tendina destra: due tab, oppure la scheda del marker */
+.panel--dx.caregiver-dx { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+.tab-corpo, .scheda, .chat__scambio { min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid var(--line); }
+.tab {
+  flex: 1; padding: 12px 8px;
+  border: none; border-bottom: 2px solid transparent; background: none;
+  font: inherit; font-size: 13px; color: var(--ink-2); cursor: pointer;
+}
+.tab:hover { color: var(--ink); }
+.tab.attivo { color: var(--ink); font-weight: 600; border-bottom-color: var(--ink); }
+.tab__novita { display: inline-block; width: 6px; height: 6px; margin-left: 5px; border-radius: 50%; background: #b8382d; vertical-align: 2px; }
+.tab-corpo { flex: 1; overflow-y: auto; padding: 16px; }
+
+/* Voci delle liste: luoghi salvati e servizi dei pacchetti */
+.voci { list-style: none; margin: 0; padding: 0; }
+.voce { margin: 0 -8px; padding: 9px 8px; border-top: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.voce:first-child { border-top: none; }
+.voce:hover, .voce.in-evidenza { background: var(--bg); }
+.voce__servizio { display: block; font-size: 13px; font-weight: 600; }
+.voce__ente, .voce__tempo { display: block; margin-top: 1px; font-size: 12px; color: var(--ink-2); }
+.voci-cane { display: flex; flex-wrap: wrap; gap: 4px; margin: 5px 0 0; padding: 0; list-style: none; }
+.voce-cane { padding: 2px 7px; font-size: 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); }
+
+/* Pacchetti del tab «Consigliati» */
+.pacchetto { margin-bottom: 12px; border: 1px solid var(--line); border-radius: 8px; }
+.pacchetto__testata { display: flex; align-items: center; gap: 10px; padding: 10px 12px; }
+.pacchetto__titolo { flex: 1; display: flex; align-items: center; gap: 8px; padding: 0; border: none; background: none; font: inherit; text-align: left; color: var(--ink); cursor: pointer; }
+.pacchetto__nomi { flex: 1; }
+.pacchetto__nome { display: block; font-size: 13px; font-weight: 600; }
+.pacchetto__data { display: block; margin-top: 1px; font-size: 11px; color: var(--ink-2); }
+.pacchetto__freccia { flex: none; color: var(--ink-2); transition: transform .2s ease; }
+.pacchetto.aperto .pacchetto__freccia { transform: rotate(180deg); }
+.pacchetto__corpo { padding: 0 12px 8px; }
+.pacchetto:not(.aperto) .pacchetto__corpo { display: none; }
+.pacchetto__testo { margin: 0 0 6px; font-size: 12px; line-height: 1.45; color: var(--ink-2); }
+.pacchetto__commento { font-style: italic; }
+.pacchetto.spento .voce { opacity: .5; }
+
+/* Interruttore che accende e spegne un pacchetto sulla mappa */
+.interruttore {
+  position: relative; flex: none;
+  width: 30px; height: 17px; padding: 0;
+  border: none; border-radius: 999px; background: var(--line);
+  cursor: pointer; transition: background .15s ease;
+}
+.interruttore::after {
+  content: ""; position: absolute; top: 2px; left: 2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--panel); box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  transition: transform .15s ease;
+}
+.interruttore[aria-checked="true"] { background: var(--ink); }
+.interruttore[aria-checked="true"]::after { transform: translateX(13px); }
+
+/* Scheda del marker («servizio presso ente») */
+.scheda { position: relative; flex: 1; overflow-y: auto; padding: 16px; }
+.scheda h2 { padding-right: 30px; }
+.scheda p { margin: 4px 0; }
+.scheda__altro { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.scheda__salva {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 14px; padding: 6px 12px;
+  border: 1px solid var(--ink); border-radius: 999px; background: var(--panel);
+  font: inherit; font-size: 12px; color: var(--ink); cursor: pointer;
+}
+.scheda__salva:hover { background: var(--bg); }
+.scheda__salva:disabled { border-color: var(--line); color: var(--ink-2); background: var(--panel); cursor: default; }
+
+/* Selettore delle relazioni nella scheda */
+.selettore-relazioni { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
 .selettore-relazioni__pulsante {
-  font: inherit;
-  font-size: 12px;
   padding: 6px 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel);
-  color: var(--ink);
-  cursor: pointer;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  font: inherit; font-size: 12px; color: var(--ink); cursor: pointer;
 }
 .selettore-relazioni__pulsante:hover { background: var(--bg); }
-.selettore-relazioni__pulsante.attivo { background: var(--ink); color: var(--panel); border-color: var(--ink); }
-
-/* Riquadro della conversazione (Conversare a/b nel brief): in basso sulla mappa, a riposo finché
-   non si scrive. Markup e colori provvisori. */
-.conversazione {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  width: min(92%, 560px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  z-index: 1;
-}
-.conversazione__risposta {
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 12px 14px;
-  font-size: 13px;
-  line-height: 1.45;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .1);
-}
-.conversazione__risposta.scrivendo { color: var(--ink-2); font-style: italic; }
-.conversazione__risposta p { margin: 0; }
-.conversazione__bisogni { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
-.conversazione__bisogno {
-  font-size: 11px;
-  padding: 3px 10px;
-  border-radius: 999px;
-  background: var(--bg);
-  color: var(--ink-2);
-  border: 1px solid var(--line);
-}
-.conversazione__nome {
-  font: inherit;
-  padding: 0 2px;
-  border: none;
-  background: none;
-  color: var(--ink);
-  text-decoration: underline;
-  cursor: pointer;
-}
-.conversazione__nome:hover { background: var(--bg); }
-.conversazione__nome.evidenziato { font-weight: 700; background: var(--bg); border-radius: 3px; }
-.conversazione__form {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 4px 4px 4px 16px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, .1);
-}
-.conversazione__form input {
-  flex: 1;
-  border: none;
-  background: none;
-  font: inherit;
-  padding: 9px 0;
-  color: var(--ink);
-}
-.conversazione__form input:focus { outline: none; }
-.conversazione__form button {
-  font: inherit;
-  font-size: 13px;
-  padding: 9px 18px;
-  border: none;
-  border-radius: 999px;
-  background: var(--ink);
-  color: var(--panel);
-  cursor: pointer;
-}
-.conversazione__form button:disabled { opacity: .5; cursor: default; }
+.selettore-relazioni__pulsante.attivo { border-color: var(--ink); background: var(--ink); color: var(--panel); }

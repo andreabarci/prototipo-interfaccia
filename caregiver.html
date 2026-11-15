@@ -23,31 +23,33 @@
     </form>
   </div>
 
-  <div class="app dx-closed" id="app">
-    <aside class="panel panel--sx" id="panel-sx">
-      <p class="eyebrow">Tendina sinistra</p>
-      <p>La proposta del case manager.</p>
+  <div class="app app--caregiver" id="app">
+    <!-- Tendina sinistra: la chat, comprimibile -->
+    <aside class="panel panel--sx chat" id="panel-sx">
+      <div class="chat__testata">
+        <p class="eyebrow">Chat</p>
+        <button class="chat__comprimi" id="chat-comprimi" type="button" aria-label="Comprimi la chat">‹</button>
+      </div>
+      <div class="chat__scambio" id="chat-scambio"></div>
+      <form class="chat__barra" id="chat-form" autocomplete="off">
+        <input type="text" id="chat-input" placeholder="Che cosa stai cercando?">
+        <button type="submit" aria-label="Invia">↑</button>
+      </form>
     </aside>
 
     <main class="stage">
       <div id="map"></div>
-      <div class="conversazione" id="conversazione">
-        <div class="conversazione__risposta" id="conversazione-risposta" hidden></div>
-        <form class="conversazione__form" id="conversazione-form">
-          <input type="text" id="conversazione-input"
-            value="Cerco qualcosa vicino a casa per far muovere un po' mio padre e fargli incontrare altre persone.">
-          <button type="submit">Invia</button>
-        </form>
+      <!-- Raggio del quartiere: − 15 min a piedi + (il testo lo scrive js/caregiver.js) -->
+      <div class="raggio" id="raggio">
+        <button type="button" class="raggio__passo" data-passo="-1" aria-label="Meno minuti a piedi">−</button>
+        <span class="raggio__valore" id="raggio-valore" aria-live="polite"></span>
+        <button type="button" class="raggio__passo" data-passo="1" aria-label="Più minuti a piedi">+</button>
       </div>
     </main>
 
-    <aside class="panel panel--dx" id="panel-dx">
-      <button class="panel__close" id="panel-dx-close" type="button" aria-label="Chiudi la tendina">×</button>
-      <div class="panel__content" id="panel-dx-content">
-        <p class="eyebrow">Tendina destra</p>
-        <p>Il luogo selezionato.</p>
-      </div>
-    </aside>
+    <!-- Tendina destra: sempre aperta. Il contenuto (i due tab, oppure la scheda del marker) lo
+         scrive js/caregiver.js -->
+    <aside class="panel panel--dx caregiver-dx" id="panel-dx"></aside>
   </div>
 
   <script src="js/config.js"></script>

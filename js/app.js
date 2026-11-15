@@ -292,7 +292,7 @@ window.startApp = async function () {
   // ---------- mappa
   mapboxgl.accessToken = CONFIG.mapboxToken;
   const map = new mapboxgl.Map({
-    container: "map", style: CONFIG.mapStyle, center: CONFIG.center, zoom: CONFIG.zoom,
+    container: "map", style: CONFIG.mapStyleCaseManager, center: CONFIG.center, zoom: CONFIG.zoom,
     minZoom: CONFIG.minZoom, maxZoom: CONFIG.maxZoom, language: "it",
   });
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");

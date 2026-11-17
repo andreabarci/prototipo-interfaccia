@@ -329,6 +329,34 @@ body.locked .app { visibility: hidden; }
    dell'ente nel colore del suo macrodominio — la stessa informazione che prima stava nell'etichetta
    sul marker, ora qui quando un servizio è selezionato (vedi selezionaServizio e fumettoServizio,
    usata anche per il fumetto del marker collegato da un ramo in hover). */
+/* Nel caregiver il fumetto è simmetrico rispetto al marker; testo a bandiera allineato a sinistra. */
+/* Fondo, grandezza e colore del testo come la pillola dei minuti (.pillola-tempo--caregiver); l'ente
+   resta nel colore del suo macrodominio. */
+.popup-servizio--caregiver .mapboxgl-popup-content {
+  text-align: left; padding: 4px 7px; line-height: 1.2; /* a bandiera, allineato a sinistra, su ogni lato */
+  background: #FFFDF8; font-size: 10px; color: #5C554D;
+  hyphens: auto; -webkit-hyphens: auto; /* sillabazione italiana: la pagina è lang="it" */
+}
+/* Contorno come quello della pillola (1 px, #858585), anche lungo la punta: la punta è un triangolo
+   grigio con sopra un triangolo color carta un poco più piccolo, che lascia vedere solo il bordo. */
+.popup-servizio--caregiver .mapboxgl-popup-content { border: 1px solid #858585; border-radius: 8px; box-shadow: none; } /* il doppio della pillola */
+.popup-servizio--caregiver .mapboxgl-popup-tip { position: relative; z-index: 1; }
+.popup-servizio--caregiver .mapboxgl-popup-tip::after { content: ""; position: absolute; border: 9px solid transparent; }
+/* Il fumetto può uscire sopra, sotto, a destra o a sinistra del marker (vedi ancoraggioFumetto in
+   js/caregiver.js): una punta per ciascun lato. */
+.popup-servizio--caregiver.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip { margin-top: -1px; border-top-color: #858585; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip::after { left: -9px; top: -11px; border-bottom: none; border-top-color: #FFFDF8; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-top .mapboxgl-popup-tip { margin-bottom: -1px; border-bottom-color: #858585; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-top .mapboxgl-popup-tip::after { left: -9px; top: 2px; border-top: none; border-bottom-color: #FFFDF8; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-left .mapboxgl-popup-tip { margin-right: -1px; border-right-color: #858585; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-left .mapboxgl-popup-tip::after { left: 2px; top: -9px; border-left: none; border-right-color: #FFFDF8; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-right .mapboxgl-popup-tip { margin-left: -1px; border-left-color: #858585; }
+.popup-servizio--caregiver.mapboxgl-popup-anchor-right .mapboxgl-popup-tip::after { left: -11px; top: -9px; border-right: none; border-left-color: #FFFDF8; }
+.popup-servizio--caregiver .fumetto-servizio__presso { color: inherit; }
+/* Servizio, «presso» ed ente in un'unica frase, separati solo da uno spazio, stessa grandezza. */
+.popup-servizio--caregiver .fumetto-servizio__titolo { display: inline; font-size: 10px; }
+.popup-servizio--caregiver .fumetto-servizio__ente { display: inline; margin: 0 0 0 .25em; }
+
 .fumetto-servizio__titolo {
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -388,12 +416,31 @@ body.locked .app { visibility: hidden; }
 /* Tutta la grafica qui sotto è provvisoria: la decide Andrea (vedi brief-caregiver-claude-code-2.md).
    I colori e le forme dei marker sulla mappa sono invece in cima a js/caregiver.js. */
 
-/* Impianto: chat a sinistra (comprimibile), mappa al centro, tendina destra sempre aperta. */
-.app--caregiver { grid-template-columns: 320px minmax(0, 1fr) 340px; }
-.app--caregiver.sx-chiusa { grid-template-columns: 44px minmax(0, 1fr) 340px; }
+/* Impianto: tendina sinistra sempre aperta (tab o scheda), mappa al centro, chat a destra
+   (comprimibile verso destra, in modo speculare). */
+.app--caregiver { grid-template-columns: 340px minmax(0, 1fr) 320px; }
+.app--caregiver.chat-chiusa { grid-template-columns: 340px minmax(0, 1fr) 44px; }
 @media (max-width: 900px) {
-  .app--caregiver, .app--caregiver.sx-chiusa { grid-template-columns: 1fr; }
+  .app--caregiver, .app--caregiver.chat-chiusa { grid-template-columns: 1fr; }
 }
+
+/* Pillola dei minuti a piedi sulla linea dal domicilio: compatta, nei colori della mappa (fondo
+   delle vie locali, bordo delle strade), testo scuro caldo per restare leggibile senza spiccare. */
+.pillola-tempo--caregiver {
+  border-radius: 4px; /* la metà del fumetto (.popup-servizio--caregiver) */
+  gap: 2px;
+  padding: 0 5px;
+  background: #FFFDF8;
+  /* Come appare a schermo la linea dei minuti (LINEA_MINUTI_COLORE #474747 in js/caregiver.js): la
+     mappa ammorbidisce i bordi delle linee sottili tratteggiate, che risultano più chiare del loro
+     colore. Misurato sui pixel: circa #858585. Il bordo netto della pillola usa quel grigio. */
+  border-color: #858585;
+  font-size: 10px;
+  line-height: 15px;
+  color: #5C554D;
+  box-shadow: none;
+}
+.pillola-tempo--caregiver svg { width: 8px; height: 8px; color: #8C8378; }
 
 /* Contenitore della pillola del tempo a piedi: non deve mai intercettare il mouse (Mapbox gli scrive
    pointer-events in linea, per questo !important). */
@@ -424,7 +471,7 @@ body.locked .app { visibility: hidden; }
 
 /* Chat */
 .chat { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
-.chat__testata { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 8px 16px; }
+.chat__testata { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px 12px; }
 .chat__testata .eyebrow { margin: 0; }
 .chat__comprimi {
   width: 24px; height: 24px; flex: none;
@@ -434,10 +481,10 @@ body.locked .app { visibility: hidden; }
   font-size: 14px; line-height: 1; cursor: pointer;
 }
 .chat__comprimi:hover { background: var(--bg); color: var(--ink); }
-.sx-chiusa .chat__testata { justify-content: center; padding: 12px 8px; }
-.sx-chiusa .chat__testata .eyebrow,
-.sx-chiusa .chat__scambio,
-.sx-chiusa .chat__barra { display: none; }
+.chat-chiusa .chat__testata { justify-content: center; padding: 12px 8px; }
+.chat-chiusa .chat__testata .eyebrow,
+.chat-chiusa .chat__scambio,
+.chat-chiusa .chat__barra { display: none; }
 
 .chat__scambio { flex: 1; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px; }
 .chat-msg { font-size: 13px; line-height: 1.5; }
@@ -509,8 +556,8 @@ body.locked .app { visibility: hidden; }
 .chat__barra input:disabled,
 .chat__barra button:disabled { opacity: .45; cursor: default; }
 
-/* Tendina destra: due tab, oppure la scheda del marker */
-.panel--dx.caregiver-dx { padding: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Tendina sinistra: due tab, oppure la scheda del marker */
+.caregiver-luoghi { position: relative; padding: 0; display: flex; flex-direction: column; overflow: hidden; }
 .tab-corpo, .scheda, .chat__scambio { min-height: 0; }
 .tabs { display: flex; border-bottom: 1px solid var(--line); }
 .tab {

@@ -24,18 +24,9 @@
   </div>
 
   <div class="app app--caregiver" id="app">
-    <!-- Tendina sinistra: la chat, comprimibile -->
-    <aside class="panel panel--sx chat" id="panel-sx">
-      <div class="chat__testata">
-        <p class="eyebrow">Chat</p>
-        <button class="chat__comprimi" id="chat-comprimi" type="button" aria-label="Comprimi la chat">‹</button>
-      </div>
-      <div class="chat__scambio" id="chat-scambio"></div>
-      <form class="chat__barra" id="chat-form" autocomplete="off">
-        <input type="text" id="chat-input" placeholder="Che cosa stai cercando?">
-        <button type="submit" aria-label="Invia">↑</button>
-      </form>
-    </aside>
+    <!-- Tendina sinistra: sempre aperta. Il contenuto (i due tab, oppure la scheda del marker) lo
+         scrive js/caregiver.js -->
+    <aside class="panel panel--sx caregiver-luoghi" id="panel-luoghi"></aside>
 
     <main class="stage">
       <div id="map"></div>
@@ -47,9 +38,18 @@
       </div>
     </main>
 
-    <!-- Tendina destra: sempre aperta. Il contenuto (i due tab, oppure la scheda del marker) lo
-         scrive js/caregiver.js -->
-    <aside class="panel panel--dx caregiver-dx" id="panel-dx"></aside>
+    <!-- Tendina destra: la chat, comprimibile verso destra -->
+    <aside class="panel panel--dx chat" id="panel-chat">
+      <div class="chat__testata">
+        <button class="chat__comprimi" id="chat-comprimi" type="button" aria-label="Comprimi la chat">›</button>
+        <p class="eyebrow">Chat</p>
+      </div>
+      <div class="chat__scambio" id="chat-scambio"></div>
+      <form class="chat__barra" id="chat-form" autocomplete="off">
+        <input type="text" id="chat-input" placeholder="Che cosa stai cercando?">
+        <button type="submit" aria-label="Invia">↑</button>
+      </form>
+    </aside>
   </div>
 
   <script src="js/config.js"></script>

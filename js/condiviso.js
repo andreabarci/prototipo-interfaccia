@@ -8,7 +8,7 @@
 const DOMICILIO_INIZIALE = { lat: 45.4965, lon: 9.1370 };
 
 // Colori provvisori per macrodominio (da ridisegnare).
-const COLORI = { sanitario: "#2f6f9f", sociosanitario: "#6a5ba8", sociale: "#2b8a7f" };
+const COLORI = { sanitario: "#173C59", sociosanitario: "#196EB6", sociale: "#E94B1E" };
 // Colore di riserva (dalla palette dell'interfaccia, vedi --ink-2 in css/style.css), usato solo se
 // un ente non ha un macrodominio riconosciuto.
 const COLORE_CLUSTER = "#5a666e";
@@ -69,15 +69,16 @@ const RAMO_CAMPIONI = 40; // punti con cui si disegna la curva
 
 // Punto intermedio di una curva di Bézier quadratica: il punto di controllo è spostato in
 // perpendicolare al segmento p0→p1, dal lato "destro" (senso orario visto da p0), di RAMO_CURVATURA
-// volte la lunghezza del segmento. Restituisce RAMO_CAMPIONI punti campionati lungo la curva.
-function campionaCurva(p0, p1) {
+// volte la lunghezza del segmento (oppure di `curvatura`, se data). Restituisce RAMO_CAMPIONI punti
+// campionati lungo la curva.
+function campionaCurva(p0, p1, curvatura = RAMO_CURVATURA) {
   const dx = p1[0] - p0[0];
   const dy = p1[1] - p0[1];
   const lunghezza = Math.hypot(dx, dy) || 1;
   const px = dy / lunghezza; // perpendicolare normalizzata, ruotata di -90°
   const py = -dx / lunghezza;
-  const cx = (p0[0] + p1[0]) / 2 + px * lunghezza * RAMO_CURVATURA;
-  const cy = (p0[1] + p1[1]) / 2 + py * lunghezza * RAMO_CURVATURA;
+  const cx = (p0[0] + p1[0]) / 2 + px * lunghezza * curvatura;
+  const cy = (p0[1] + p1[1]) / 2 + py * lunghezza * curvatura;
   const punti = [];
   for (let i = 0; i < RAMO_CAMPIONI; i++) {
     const t = i / (RAMO_CAMPIONI - 1);
@@ -125,7 +126,9 @@ async function richiediTempiAPiedi(origine, destinazioni, token) {
 // Linee del tempo (domicilio → marker), rette e tratteggiate — mai curve, per non confondersi con i
 // rami, che sono curvi (vedi campionaCurva sopra): natura diversa anche nel disegno, non solo nel
 // significato. Nel case manager appaiono in hover su un ramo; nel caregiver, in hover su un marker o
-// su una voce della tendina sinistra (vedi il brief). Colori provvisori.
+// su una voce della tendina sinistra (vedi il brief). Colori provvisori. Il caregiver usa grafica
+// sua (appena arcuata, a trattini, vedi LINEA_MINUTI_* in js/caregiver.js): queste costanti valgono
+// solo per il case manager.
 const TEMPO_LINEA_COLORE = "#8a9299"; // grigio medio, neutro
 const TEMPO_LINEA_SPESSORE = 1.5;
 const TEMPO_LINEA_OPACITA = 0.9;

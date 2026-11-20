@@ -23,38 +23,27 @@
     </form>
   </div>
 
-  <div class="app dx-closed" id="app">
-    <aside class="panel panel--sx" id="panel-sx">
-      <p class="eyebrow">Tendina sinistra</p>
-      <p>Cartella della persona e bisogni.</p>
-    </aside>
+  <!-- Case manager: la mappa a tutta pagina, con sopra tre elementi volanti (vedi js/app.js e la
+       sezione «Case manager» di css/style.css). -->
+  <div class="app app--cm" id="app">
+    <main class="stage"><div id="map"></div></main>
 
-    <main class="stage">
-      <div id="map"></div>
-      <div class="selettore-legame" id="selettore-legame" hidden>
-        <div class="selettore-legame__pulsanti" id="selettore-legame-pulsanti"></div>
-        <p class="selettore-legame__vuoto" id="selettore-legame-vuoto" hidden>Nessun legame di questo tipo</p>
-      </div>
-    </main>
+    <!-- Cartella della persona, in alto a sinistra: persona, domicilio, selettore del bisogno -->
+    <section class="cm-volante cm-cartella" id="cartella"></section>
 
-    <aside class="panel panel--dx" id="panel-dx">
-      <button class="panel__close" id="panel-dx-close" type="button" aria-label="Chiudi la tendina">×</button>
-      <div class="panel__content" id="panel-dx-content">
-        <p class="eyebrow">Tendina destra</p>
-        <p>Servizio selezionato.</p>
-      </div>
-      <!-- Fuori da panel-dx-content apposta: mostraEnte riscrive solo quello sopra, questo blocco
-           resta quando si cambia il tipo di legame senza cambiare ente (vedi aggiornaListaLegami). -->
-      <div class="legami-collegati" id="legami-collegati" hidden>
-        <p class="eyebrow" id="legami-collegati-titolo"></p>
-        <p class="meta" id="legami-collegati-vuoto" hidden></p>
-        <ul class="servizi" id="legami-collegati-lista"></ul>
-      </div>
+    <!-- Legenda, in basso a sinistra, senza sfondo -->
+    <div class="cm-legenda" id="legenda"></div>
+
+    <!-- Scheda volante a destra: dell'ente (clic su un marker) o del servizio (clic su un servizio) -->
+    <aside class="cm-volante cm-scheda" id="scheda" hidden>
+      <div class="cm-scheda__pagina" id="scheda-ente"></div>
+      <div class="cm-scheda__pagina" id="scheda-servizio" hidden></div>
     </aside>
   </div>
 
   <script src="js/config.js"></script>
   <script src="js/condiviso.js"></script>
+  <script src="js/marker-composto.js"></script>
   <script src="js/app.js"></script>
   <script src="js/gate.js"></script>
 </body>

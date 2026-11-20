@@ -6,12 +6,10 @@
 const CONFIG = {
   mapboxToken: "pk.eyJ1IjoiYWJhcmNpIiwiYSI6ImNtdzBoMHIxNzFiejg0ZHM5M2h2ZzN0NzUifQ.Z8ZYG4KbaMFKViVYj9gk3Q",
 
-  // Stile di base, uno per pagina.
-  // Case manager: per ora uno stile chiaro di Mapbox.
-  mapStyleCaseManager: "mapbox://styles/mapbox/light-v11",
-  // Caregiver: file del progetto generato da strumenti/crea_stile_caregiver.py
-  // (non modificarlo a mano: cambia la palette nello script e rilancialo).
-  mapStyleCaregiver: "data/stile-caregiver.json",
+  // Stile di base, lo stesso per le due pagine: file del progetto generato da
+  // strumenti/crea_stile_mappa.py (non modificarlo a mano: cambia la palette nello script e rilancialo).
+  // Lo stile chiaro di Mapbox usato prima dal case manager era "mapbox://styles/mapbox/light-v11".
+  mapStyle: "data/stile-mappa.json",
 
   // Vista iniziale su Milano
   center: [9.19, 45.4642], // [longitudine, latitudine]

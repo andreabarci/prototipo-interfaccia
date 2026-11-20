@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Prototipo · prova del marker composto</title>
+
+  <!-- Mapbox GL JS -->
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.css" rel="stylesheet">
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.26.0/mapbox-gl.js"></script>
+
+  <link href="css/style.css" rel="stylesheet">
+  <!-- Stili del solo pannello di prova: stanno qui, così la pagina si toglie tutta insieme. -->
+  <style>
+    .prova { position: fixed; inset: 0; }
+    .prova #map { position: absolute; inset: 0; }
+    .pannello-prova {
+      position: absolute; top: 12px; left: 12px; z-index: 2; width: 230px;
+      padding: 10px 12px; background: #FFFDF8; border: 1px solid #858585; border-radius: 8px;
+      font-size: 11px; color: #5C554D; line-height: 1.35;
+    }
+    .pannello-prova h2 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+    .pannello-prova fieldset { border: none; margin: 0 0 8px; padding: 0; }
+    .pannello-prova legend { padding: 0; margin-bottom: 3px; font-weight: 600; }
+    .pannello-prova label { display: flex; align-items: center; gap: 5px; margin: 2px 0; }
+    .pannello-prova select { font: inherit; font-size: 11px; width: 100%; }
+    .pannello-prova input[type="number"] { font: inherit; font-size: 11px; }
+    .pannello-prova input[type="number"] { width: 48px; }
+    .pannello-prova input[type="range"] { flex: 1; min-width: 0; }
+    .pannello-prova .valore { width: 42px; text-align: right; white-space: nowrap; }
+    .pannello-prova .nota { margin: 4px 0 0; color: #8C8378; }
+    .tendina-prova { position: absolute; top: 0; right: 0; bottom: 0; z-index: 2; width: 320px; border-left: 1px solid var(--line); }
+    .tendina-prova[hidden] { display: none; }
+  </style>
+</head>
+<body class="locked">
+  <div class="gate" id="gate">
+    <form class="gate__box" id="gate-form">
+      <p class="eyebrow">Prototipo di tesi</p>
+      <label for="gate-input">Password</label>
+      <input id="gate-input" type="password" autocomplete="current-password" required>
+      <button type="submit">Entra</button>
+      <p class="gate__error" id="gate-error" hidden>Password non corretta.</p>
+    </form>
+  </div>
+
+  <div class="app prova" id="app">
+    <div id="map"></div>
+
+    <!-- Pannello di prova: solo in questa pagina (regole dello strumento del case manager) -->
+    <form class="pannello-prova" id="pannello" autocomplete="off">
+      <h2>Marker composto · prova</h2>
+      <fieldset>
+        <legend>Bisogno selezionato</legend>
+        <label><select id="bisogno"></select></label>
+        <p class="nota">Nessuno = rete. Con un bisogno: ventaglio. Clic su un marker apre la tendina; clic su un servizio lo sceglie.</p>
+      </fieldset>
+      <fieldset>
+        <legend>Anello</legend>
+        <label>intero oltre <input type="number" id="soglia" min="1" max="20" value="8"> servizi</label>
+        <label>spazio <input type="range" id="spazio" min="0" max="6" step="0.5" value="2.5"><span class="valore" id="spazio-valore"></span></label>
+      </fieldset>
+    </form>
+
+    <!-- Tendina destra minima: bisogni e servizi del marker cliccato, per provare hover e clic -->
+    <aside class="panel tendina-prova" id="tendina" hidden>
+      <button type="button" class="panel__close" id="tendina-chiudi" aria-label="Chiudi">×</button>
+      <div id="tendina-contenuto"></div>
+    </aside>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/condiviso.js"></script>
+  <script src="js/marker-composto.js"></script>
+  <script src="js/prova-marker-composto.js"></script>
+  <script src="js/gate.js"></script>
+</body>
+</html>

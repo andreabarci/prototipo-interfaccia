@@ -2,7 +2,7 @@
  "version": 8,
  "name": "Caregiver · Carta e salvia",
  "metadata": {
-  "generato-da": "strumenti/crea_stile_caregiver.py",
+  "generato-da": "strumenti/crea_stile_mappa.py",
   "stile-di-partenza": "mapbox/outdoors-v12",
   "nota": "File generato: non modificarlo a mano, cambia la palette nello script e rilancialo."
  },
@@ -11172,19 +11172,6 @@
    "minzoom": 12.5,
    "filter": [
     "any",
-    [
-     "match",
-     [
-      "get",
-      "class"
-     ],
-     [
-      "religion",
-      "public_facilities"
-     ],
-     true,
-     false
-    ],
     [
      "==",
      [

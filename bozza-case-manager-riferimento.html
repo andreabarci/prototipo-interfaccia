@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<title>Case manager — scheda dell'ente</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div style="width: 100%; height: 900px; position: relative; overflow: hidden; font-family: Inter, system-ui, sans-serif; color: #1F1E1B; background: #EFEBE1">
+
+  <!-- Barra di sistema -->
+  <div style="position: absolute; top: 0; left: 0; right: 0; height: 36px; background: #FBF9F4; border-bottom: 1px solid #E2DDD2; display: flex; align-items: flex-end; gap: 2px; padding: 0 12px; box-sizing: border-box; z-index: 5">
+    <button type="button" style="height: 30px; padding: 0 16px; border: 1px solid #E2DDD2; border-bottom: none; border-radius: 4px 4px 0 0; background: #FFFFFF; font-family: inherit; font-size: 12px; font-weight: 500; color: #1F1E1B">Case manager</button>
+    <button type="button" style="height: 30px; padding: 0 16px; border: none; background: transparent; font-family: inherit; font-size: 12px; font-weight: 500; color: #6B6A65">Caregiver</button>
+  </div>
+
+  <!-- Mappa -->
+  <div style="position: absolute; top: 36px; left: 0; right: 0; bottom: 0">
+    <svg aria-hidden="true" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0">
+      <rect x="56" y="6" width="14" height="11" fill="#DCE4D3"></rect>
+      <rect x="18" y="68" width="10" height="14" fill="#DCE4D3"></rect>
+      <path d="M0 40 C 25 36, 45 46, 100 38" stroke="#FFFFFF" stroke-width="7" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M38 0 C 40 30, 36 60, 42 100" stroke="#FFFFFF" stroke-width="7" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M0 72 C 30 70, 60 78, 100 66" stroke="#FFFFFF" stroke-width="4" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M62 0 C 60 35, 66 70, 60 100" stroke="#FFFFFF" stroke-width="4" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M0 20 L 100 24" stroke="#FFFFFF" stroke-width="3" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M20 0 L 24 100" stroke="#FFFFFF" stroke-width="3" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M50 0 L 52 100" stroke="#FFFFFF" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"></path>
+      <path d="M0 55 L 100 52" stroke="#FFFFFF" stroke-width="2" fill="none" vector-effect="non-scaling-stroke"></path>
+    </svg>
+
+    <sc-if value="{{ isSvc }}" hint-placeholder-val="{{ false }}">
+      <svg aria-hidden="true" width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style="position: absolute; top: 0; left: 0; pointer-events: none">
+        <sc-for list="{{ rami }}" as="r" hint-placeholder-count="2">
+          <path d="{{ r.d }}" stroke="{{ dom }}" stroke-width="2.5" stroke-dasharray="{{ r.dash }}" opacity="{{ r.op }}" fill="none" stroke-linecap="round" vector-effect="non-scaling-stroke"></path>
+        </sc-for>
+      </svg>
+    </sc-if>
+
+    <sc-for list="{{ punti }}" as="p" hint-placeholder-count="14">
+      <div style="position: absolute; left: {{ p.x }}%; top: {{ p.y }}%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border-radius: 50%; background: {{ p.c }}; border: 2px solid #FFFFFF; box-sizing: border-box; opacity: {{ p.op }}; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; color: #FFFFFF; box-shadow: 0 1px 2px rgba(0,0,0,0.2)">{{ p.num }}</div>
+    </sc-for>
+
+    <!-- Domicilio -->
+    <div style="position: absolute; left: 44%; top: 60%; width: 28px; height: 28px; margin: -14px 0 0 -14px; border-radius: 4px; background: #1F1E1B; border: 2px solid #FFFFFF; box-sizing: border-box; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 3px rgba(0,0,0,0.3)">
+      <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 L12 4 L21 11 V20 H14 V14 H10 V20 H3 Z" fill="#FFFFFF"></path></svg>
+    </div>
+
+    <!-- Marker aperto con anello aderente -->
+    <div style="position: absolute; left: 50%; top: 46%; width: 60px; height: 60px; margin: -30px 0 0 -30px">
+      <svg width="60" height="60" viewBox="0 0 60 60" aria-hidden="true">
+        <circle cx="30" cy="30" r="26.5" fill="#EFEBE1" opacity="0.94"></circle>
+        <sc-for list="{{ tacche }}" as="t" hint-placeholder-count="5">
+          <path d="{{ t.d }}" stroke="{{ t.c }}" stroke-width="{{ t.w }}" opacity="{{ t.op }}" fill="none"></path>
+        </sc-for>
+        <circle cx="30" cy="30" r="17" fill="{{ dom }}" stroke="#FFFFFF" stroke-width="2"></circle>
+        <circle cx="30" cy="25.5" r="3.5" fill="#FFFFFF"></circle>
+        <path d="M23.5 37 c0 -4 3 -6.5 6.5 -6.5 s6.5 2.5 6.5 6.5" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linecap="round"></path>
+      </svg>
+    </div>
+  </div>
+
+  <!-- Cartella volante (ex tendina sinistra) -->
+  <div style="position: absolute; top: 52px; left: 16px; width: 300px; background: #FFFFFF; border-radius: 6px; box-shadow: 0 4px 16px rgba(31,30,27,0.12), 0 0 0 1px rgba(31,30,27,0.05); padding: 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 12px; z-index: 4">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6A65">Cartella</div>
+      <div style="font-size: 16px; font-weight: 600">Maria R., 82 anni</div>
+      <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; color: #57554F">
+        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 L12 4 L21 11 V20 H14 V14 H10 V20 H3 Z" fill="#57554F"></path></svg>
+        <span>Domicilio · [via e civico], Milano</span>
+      </div>
+    </div>
+    <div style="height: 1px; background: #ECE9E2"></div>
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #6B6A65">Bisogno</div>
+      <button type="button" onClick="{{ toggleNeed }}" aria-expanded="{{ needOpen }}" style="display: flex; align-items: center; justify-content: space-between; height: 44px; padding: 0 12px 0 14px; border-radius: 2px; border: 1px solid #D9D5CC; background: #F4F2ED; font-family: inherit; font-size: 14px; font-weight: 600; color: #1F1E1B; cursor: pointer">
+        <span>{{ bisogno }}</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ needChevron }}" stroke="#57554F" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+      </button>
+      <sc-if value="{{ needOpen }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 2px; padding-top: 6px">
+          <div style="font-size: 11px; color: #6B6A65; padding: 4px 4px">Emersi dalla valutazione</div>
+          <sc-for list="{{ emersi }}" as="b" hint-placeholder-count="1">
+            <button type="button" onClick="{{ b.pick }}" style="display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; border-radius: 2px; border: none; background: {{ b.bg }}; font-family: inherit; font-size: 13px; font-weight: {{ b.fw }}; color: #1F1E1B; text-align: left; cursor: pointer">
+              <span>{{ b.nome }}</span>
+              <sc-if value="{{ b.sel }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12 L10 17 L19 7" stroke="#1F1E1B" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+            </button>
+          </sc-for>
+          <div style="font-size: 11px; color: #6B6A65; padding: 10px 4px 4px; border-top: 1px solid #ECE9E2; margin-top: 4px">Altri bisogni CANE</div>
+          <sc-for list="{{ altri }}" as="b" hint-placeholder-count="6">
+            <button type="button" onClick="{{ b.pick }}" style="display: flex; align-items: center; justify-content: space-between; min-height: 36px; padding: 0 10px; border-radius: 2px; border: none; background: {{ b.bg }}; font-family: inherit; font-size: 13px; font-weight: {{ b.fw }}; color: #1F1E1B; text-align: left; cursor: pointer">
+              <span>{{ b.nome }}</span>
+              <sc-if value="{{ b.sel }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12 L10 17 L19 7" stroke="#1F1E1B" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+            </button>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <!-- Legenda volante -->
+  <div style="position: absolute; left: 20px; bottom: 16px; display: flex; flex-direction: column; gap: 5px; font-size: 11px; font-weight: 500; color: #2E2C28; text-shadow: 0 0 2px #EFEBE1, 0 0 4px #EFEBE1, 0 0 6px #EFEBE1; z-index: 3">
+    <div style="display: flex; align-items: center; gap: 12px">
+      <span style="display: flex; align-items: center; gap: 5px"><span style="width: 9px; height: 9px; border-radius: 50%; background: {{ san }}; box-shadow: 0 0 0 1.5px #FFFFFF"></span>Sanitario</span>
+      <span style="display: flex; align-items: center; gap: 5px"><span style="width: 9px; height: 9px; border-radius: 50%; background: {{ dom }}; box-shadow: 0 0 0 1.5px #FFFFFF"></span>Sociosanitario</span>
+      <span style="display: flex; align-items: center; gap: 5px"><span style="width: 9px; height: 9px; border-radius: 50%; background: {{ soc }}; box-shadow: 0 0 0 1.5px #FFFFFF"></span>Sociale</span>
+    </div>
+    <div style="display: flex; align-items: center; gap: 12px; color: #57554F">
+      <span style="display: flex; align-items: center; gap: 5px"><span style="width: 12px; height: 12px; border-radius: 50%; background: #8C877D; box-shadow: 0 0 0 1.5px #FFFFFF; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; color: #FFFFFF; text-shadow: none">2</span>Servizi nello stesso ente</span>
+      <span style="display: flex; align-items: center; gap: 5px"><span style="width: 12px; height: 12px; border-radius: 2px; background: #1F1E1B; display: flex; align-items: center; justify-content: center"><svg width="8" height="8" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 L12 4 L21 11 V20 H14 V14 H10 V20 H3 Z" fill="#FFFFFF"></path></svg></span>Domicilio</span>
+    </div>
+  </div>
+
+  <!-- Scheda volante a destra -->
+  <div style="position: absolute; top: 52px; right: 16px; bottom: 16px; width: 380px; background: #FFFFFF; border-radius: 6px; box-shadow: 0 4px 20px rgba(31,30,27,0.14), 0 0 0 1px rgba(31,30,27,0.05); display: flex; flex-direction: column; overflow: hidden; z-index: 4">
+
+    <!-- SCHEDA DELL'ENTE -->
+    <sc-if value="{{ isEnte }}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column">
+        <div style="padding: 18px 20px 24px; display: flex; flex-direction: column; gap: 20px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="display: flex; align-items: center; justify-content: space-between">
+              <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: {{ dom }}">Centro diurno integrato</div>
+              <button type="button" aria-label="Chiudi la scheda" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: #F4F2ED; display: flex; align-items: center; justify-content: center; cursor: pointer">
+                <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 L18 18 M18 6 L6 18" stroke="#57554F" stroke-width="2" stroke-linecap="round"></path></svg>
+              </button>
+            </div>
+            <h2 style="margin: 0; font-size: 24px; line-height: 1.2; font-weight: 600">CDI Simone de Beauvoir</h2>
+            <div style="font-size: 13px; color: #6B6A65">[Indirizzo dell'ente], Milano</div>
+          </div>
+          <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px">
+            <span style="display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 12px; border-radius: 2px; background: {{ relBox }}; color: {{ dom }}; font-size: 13px; font-weight: 600">
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2" fill="{{ dom }}"></circle><path d="M9 21 L11 14 L14 16 L14 21 M11 14 L12 8 L16 11 L19 12 M12 8 L8 10 L7 13" stroke="{{ dom }}" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              12 min a piedi dal domicilio
+            </span>
+            <div style="display: flex; gap: 8px">
+              <button type="button" aria-label="Indicazioni" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid #E2DDD2; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L22 12 L12 22 L2 12 Z" stroke="#57554F" stroke-width="1.8" fill="none" stroke-linejoin="round"></path><path d="M9 14 V11 H15 M13 9 L15 11 L13 13" stroke="#57554F" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+              </button>
+              <button type="button" aria-label="Sito dell'ente" style="width: 36px; height: 36px; border-radius: 50%; border: 1px solid #E2DDD2; background: #FFFFFF; display: flex; align-items: center; justify-content: center; cursor: pointer">
+                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#57554F" stroke-width="1.8" fill="none"></circle><path d="M3 12 H21 M12 3 C 8 7, 8 17, 12 21 M12 3 C 16 7, 16 17, 12 21" stroke="#57554F" stroke-width="1.6" fill="none"></path></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin: 0 20px; height: 112px; border-radius: 2px; background: #E6E1D6; display: flex; align-items: center; justify-content: center; gap: 8px; color: #6B6A65; font-size: 12px; flex-shrink: 0">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#6B6A65" stroke-width="1.6" fill="none"></rect><circle cx="9" cy="10" r="1.8" fill="#6B6A65"></circle><path d="M4 18 L10 13 L14 16 L17 13 L21 17" stroke="#6B6A65" stroke-width="1.6" fill="none" stroke-linejoin="round"></path></svg>
+          Foto dell'ente
+        </div>
+
+        <div style="padding: 20px 20px 8px; display: flex; align-items: baseline; gap: 8px">
+          <div style="font-size: 16px; font-weight: 600">Servizi offerti</div>
+          <div style="font-size: 13px; font-weight: 600; color: #6B6A65">{{ nServizi }}</div>
+        </div>
+
+        <div style="padding: 0 20px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6B6A65">{{ perLabel }} · {{ nPert }}</div>
+        <div style="padding: 0 16px; display: flex; flex-direction: column; gap: 8px">
+          <sc-for list="{{ svcPert }}" as="s" hint-placeholder-count="2">
+            <button type="button" onClick="{{ s.open }}" onMouseEnter="{{ s.enter }}" onMouseLeave="{{ s.leave }}" style="width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 12px 12px 14px; border-radius: 2px; border: 1px solid {{ s.border }}; background: {{ s.bg }}; opacity: {{ s.op }}; cursor: pointer; font-family: inherit; color: #1F1E1B">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0">
+                <div style="font-size: 14px; font-weight: 600">{{ s.nome }}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px">
+                  <sc-for list="{{ s.tags }}" as="b" hint-placeholder-count="2">
+                    <span style="font-size: 11px; padding: 2px 8px; border-radius: 2px; background: #F1EFEA; color: #57554F">{{ b }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6 L15 12 L9 18" stroke="{{ s.chev }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="padding: 18px 20px 6px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #6B6A65">Altri servizi · {{ nAltri }}</div>
+        <div style="padding: 0 16px 16px; display: flex; flex-direction: column; gap: 8px">
+          <sc-for list="{{ svcAltri }}" as="s" hint-placeholder-count="3">
+            <button type="button" onClick="{{ s.open }}" onMouseEnter="{{ s.enter }}" onMouseLeave="{{ s.leave }}" style="width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; padding: 12px 12px 12px 14px; border-radius: 2px; border: 1px solid {{ s.border }}; background: {{ s.bg }}; opacity: {{ s.op }}; cursor: pointer; font-family: inherit; color: #1F1E1B">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0">
+                <div style="font-size: 14px; font-weight: 600">{{ s.nome }}</div>
+                <div style="display: flex; flex-wrap: wrap; gap: 4px">
+                  <sc-for list="{{ s.tags }}" as="b" hint-placeholder-count="2">
+                    <span style="font-size: 11px; padding: 2px 8px; border-radius: 2px; background: #F1EFEA; color: #57554F">{{ b }}</span>
+                  </sc-for>
+                </div>
+              </div>
+              <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6 L15 12 L9 18" stroke="{{ s.chev }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="margin-top: auto; border-top: 1px solid #ECE9E2">
+          <button type="button" onClick="{{ toggleInfo }}" aria-expanded="{{ infoOpen }}" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 14px 20px; border: none; background: #FFFFFF; font-family: inherit; text-align: left; cursor: pointer; color: #1F1E1B">
+            <span style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 14px; font-weight: 600">Informazioni sull'ente</span>
+              <span style="font-size: 12px; color: #6B6A65">Orari, contatti, descrizione</span>
+            </span>
+            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="{{ infoChevron }}" stroke="#57554F" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+          </button>
+          <sc-if value="{{ infoOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 0 20px 16px; display: flex; flex-direction: column; gap: 10px; font-size: 13px">
+              <div style="display: flex; gap: 12px"><span style="width: 84px; color: #6B6A65">Orari</span><span>[Giorni e orari di apertura]</span></div>
+              <div style="display: flex; gap: 12px"><span style="width: 84px; color: #6B6A65">Contatti</span><span>[Telefono · email]</span></div>
+              <div style="display: flex; gap: 12px"><span style="width: 84px; color: #6B6A65">Descrizione</span><span>[Breve descrizione dell'ente]</span></div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- SCHEDA DEL SERVIZIO (si sovrappone a quella dell'ente) -->
+    <sc-if value="{{ isSvc }}" hint-placeholder-val="{{ false }}">
+      <div style="flex: 1; overflow-y: auto; display: flex; flex-direction: column">
+        <div style="padding: 14px 16px 0; display: flex; align-items: center; justify-content: space-between">
+          <button type="button" onClick="{{ back }}" style="display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 10px 0 6px; border-radius: 2px; border: none; background: transparent; font-family: inherit; font-size: 13px; color: #57554F; cursor: pointer">
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 L9 12 L15 18" stroke="#57554F" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+            CDI Simone de Beauvoir
+          </button>
+          <button type="button" aria-label="Chiudi la scheda" style="width: 32px; height: 32px; border-radius: 50%; border: none; background: #F4F2ED; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 L18 18 M18 6 L6 18" stroke="#57554F" stroke-width="2" stroke-linecap="round"></path></svg>
+          </button>
+        </div>
+
+        <div style="padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 20px">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: {{ dom }}">Servizio · Centro diurno integrato</div>
+            <h2 style="margin: 0; font-size: 24px; line-height: 1.2; font-weight: 600">{{ sel.nome }}</h2>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 6px">
+            <sc-for list="{{ sel.tags }}" as="b" hint-placeholder-count="2">
+              <span style="font-size: 12px; padding: 4px 10px; border-radius: 2px; background: #F1EFEA; color: #57554F">{{ b }}</span>
+            </sc-for>
+          </div>
+          <p style="margin: 4px 0 0; padding-top: 20px; border-top: 1px solid #ECE9E2; font-size: 14px; line-height: 1.6; color: #3D3B36">{{ sel.desc }}</p>
+        </div>
+
+        <div style="margin: 0 16px; padding: 14px; border-radius: 2px; background: {{ relBox }}; display: flex; flex-direction: column; gap: 8px">
+          <div style="font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: #57554F">Relazioni sulla mappa</div>
+          <sc-for list="{{ relOpts }}" as="o" hint-placeholder-count="3">
+            <button type="button" onClick="{{ o.pick }}" aria-pressed="{{ o.sel }}" style="display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 12px; border-radius: 2px; border: 1px solid {{ o.border }}; background: #FFFFFF; font-family: inherit; text-align: left; cursor: pointer; color: #1F1E1B">
+              <svg width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
+                <path d="M3 6 H37" stroke="{{ o.lc }}" stroke-width="2.2" stroke-dasharray="{{ o.dash }}" opacity="{{ o.lop }}" fill="none"></path>
+                <sc-if value="{{ o.arrowEnd }}" hint-placeholder-val="{{ true }}"><path d="M32 2 L37 6 L32 10" stroke="{{ o.lc }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></sc-if>
+                <sc-if value="{{ o.arrowStart }}" hint-placeholder-val="{{ false }}"><path d="M8 2 L3 6 L8 10" stroke="{{ o.lc }}" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></sc-if>
+              </svg>
+              <span style="flex: 1; font-size: 13px; font-weight: {{ o.fw }}">{{ o.nome }}</span>
+              <span style="font-size: 12px; color: #6B6A65">{{ o.n }}</span>
+            </button>
+          </sc-for>
+        </div>
+
+        <div style="padding: 18px 20px; display: flex; flex-direction: column; gap: 12px; font-size: 13px">
+          <div style="display: flex; gap: 12px"><span style="width: 84px; flex-shrink: 0; color: #6B6A65">Orari</span><span>[Giorni e orari del servizio]</span></div>
+          <div style="display: flex; gap: 12px"><span style="width: 84px; flex-shrink: 0; color: #6B6A65">Contatti</span><span>[Referente · telefono · email]</span></div>
+          <div style="display: flex; gap: 12px"><span style="width: 84px; flex-shrink: 0; color: #6B6A65">Accesso</span><span>[Modalità di accesso, costi]</span></div>
+        </div>
+      </div>
+      <div style="padding: 14px 16px 16px; border-top: 1px solid #ECE9E2; background: #FFFFFF; display: flex; flex-direction: column; gap: 8px">
+        <button type="button" style="width: 100%; height: 48px; border-radius: 2px; border: none; background: {{ dom }}; color: #FFFFFF; font-family: inherit; font-size: 15px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; cursor: pointer">
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12 L20 4 L14 20 L11 13 Z" stroke="#FFFFFF" stroke-width="2" fill="none" stroke-linejoin="round"></path></svg>
+          Proponi al caregiver
+        </button>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"coloreDominio":{"editor":"color","default":"#196EB6","options":["#196EB6","#173C59","#E94B1E"]},"avvio":{"editor":null,"default":"ente"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const s = this.state || {};
+    const avvio = this.props.avvio ?? 'ente';
+    const dom = this.props.coloreDominio ?? '#196EB6';
+    const svc = s.svc !== undefined ? s.svc : (avvio === 'servizio' ? 'lab' : null);
+    const needOpen = s.needOpen !== undefined ? s.needOpen : (avvio === 'bisogno');
+    const hover = s.hover ?? null;
+    const rel = s.rel ?? 'Successione';
+    const bisogno = s.bisogno ?? 'Socialità';
+    const infoOpen = s.infoOpen ?? false;
+    const set = (o) => this.setState(o);
+    const tint = (p) => 'color-mix(in srgb, ' + dom + ' ' + p + '%, #FFFFFF)';
+
+    const servizi = [
+      { id: 'lab', nome: 'Laboratorio aperto', bisogni: ['Socialità', 'Attività quotidiane'], pert: true },
+      { id: 'caffe', nome: 'Caffè Alzheimer', bisogni: ['Socialità', 'Stress di chi assiste'], pert: true },
+      { id: 'cdi', nome: 'Centro diurno', bisogni: ['Attività quotidiane', 'Cura di sé'], pert: false },
+      { id: 'stim', nome: 'Stimolazione cognitiva', bisogni: ['Memoria'], pert: false },
+      { id: 'sport', nome: 'Sportello per le famiglie', bisogni: ['Informazioni sulla condizione'], pert: false }
+    ];
+
+    const mk = (x) => {
+      const h = hover === x.id;
+      return {
+        nome: x.nome, tags: x.bisogni,
+        open: () => set({ svc: x.id, hover: null }),
+        enter: () => set({ hover: x.id }),
+        leave: () => set({ hover: null }),
+        bg: h ? tint(9) : '#FFFFFF',
+        border: h ? tint(40) : '#ECE9E2',
+        chev: h ? dom : '#A8A39A',
+        op: (x.pert || h) ? 1 : 0.55
+      };
+    };
+    const svcPert = servizi.filter((x) => x.pert).map(mk);
+    const svcAltri = servizi.filter((x) => !x.pert).map(mk);
+
+    const focus = svc || hover;
+    const ordered = servizi.filter((x) => x.pert).concat(servizi.filter((x) => !x.pert));
+    const n = ordered.length, R = 22, gap = 8;
+    const pt = (deg) => {
+      const r = deg * Math.PI / 180;
+      return [(30 + R * Math.cos(r)).toFixed(2), (30 + R * Math.sin(r)).toFixed(2)];
+    };
+    const tacche = ordered.map((x, i) => {
+      const a0 = -90 + i * 360 / n + gap / 2;
+      const a1 = -90 + (i + 1) * 360 / n - gap / 2;
+      const p0 = pt(a0), p1 = pt(a1);
+      const on = focus === x.id;
+      return {
+        d: 'M ' + p0[0] + ' ' + p0[1] + ' A ' + R + ' ' + R + ' 0 0 1 ' + p1[0] + ' ' + p1[1],
+        c: x.pert ? dom : '#B9B3A7',
+        w: on ? 5 : (x.pert ? 3 : 1.5),
+        op: (focus && !on) ? 0.35 : 1
+      };
+    });
+
+    const SAN = '#173C59', SOC = '#E94B1E', TER = SOC;
+    const base = [
+      { id: 'p1', x: 27, y: 46, c: SAN, pert: false },
+      { id: 'p2', x: 31, y: 57, c: SOC, pert: true, num: 2 },
+      { id: 'p3', x: 34, y: 24, c: dom, pert: false },
+      { id: 'p4', x: 40, y: 34, c: SOC, pert: true },
+      { id: 'p5', x: 45, y: 76, c: SAN, pert: false },
+      { id: 'p6', x: 52, y: 26, c: TER, pert: true },
+      { id: 'p7', x: 61, y: 18, c: SAN, pert: false },
+      { id: 'p8', x: 65, y: 30, c: dom, pert: true, num: 3 },
+      { id: 'p9', x: 64, y: 70, c: TER, pert: true },
+      { id: 'p10', x: 68, y: 50, c: SAN, pert: false },
+      { id: 'p11', x: 55, y: 38, c: dom, pert: false },
+      { id: 'p12', x: 27, y: 80, c: TER, pert: false },
+      { id: 'p13', x: 36, y: 66, c: dom, pert: true },
+      { id: 'p14', x: 58, y: 84, c: SOC, pert: false },
+      { id: 'p15', x: 56, y: 62, c: SOC, pert: true, num: 2 }
+    ];
+    const linkMap = { 'Successione': ['p8', 'p9'], 'Equivalenza': ['p4'], 'Anche per chi assiste': ['p13', 'p15'] };
+    const linked = svc ? linkMap[rel] : [];
+    const punti = base.map((p) => ({
+      x: p.x, y: p.y, c: p.c,
+      num: p.num ? String(p.num) : '',
+      op: svc ? (linked.indexOf(p.id) >= 0 ? 1 : 0.28) : (p.pert ? 1 : 0.3)
+    }));
+    const ox = 50, oy = 46;
+    const rami = linked.map((id) => {
+      const p = base.find((q) => q.id === id);
+      const mx = (ox + p.x) / 2 + (p.y - oy) * 0.18;
+      const my = (oy + p.y) / 2 - (p.x - ox) * 0.18;
+      const dashed = rel === 'Anche per chi assiste';
+      return { d: 'M ' + ox + ' ' + oy + ' Q ' + mx + ' ' + my + ' ' + p.x + ' ' + p.y, dash: dashed ? '6 5' : '', op: dashed ? 0.6 : 1 };
+    });
+
+    const relNames = ['Successione', 'Equivalenza', 'Anche per chi assiste'];
+    const relOpts = relNames.map((nm) => {
+      const sel = rel === nm;
+      const k = linkMap[nm].length;
+      return {
+        nome: nm, sel: sel,
+        n: k + (k === 1 ? ' collegato' : ' collegati'),
+        pick: () => set({ rel: nm }),
+        border: sel ? dom : '#E2DDD2',
+        fw: sel ? 600 : 400,
+        lc: sel ? dom : '#8C877D',
+        dash: nm === 'Anche per chi assiste' ? '4 3' : '',
+        lop: nm === 'Anche per chi assiste' ? 0.7 : 1,
+        arrowEnd: nm !== 'Anche per chi assiste',
+        arrowStart: nm === 'Equivalenza'
+      };
+    });
+
+    const selRaw = servizi.find((x) => x.id === svc) || servizi[0];
+    const descr = {
+      lab: 'Incontri di gruppo durante la settimana, con attività creative e manuali guidate dagli operatori del centro. È aperto anche a chi non frequenta il centro diurno e a chi accompagna la persona.',
+      caffe: 'Un pomeriggio al mese in cui persone con demenza e familiari si incontrano in un ambiente informale, con un breve intervento di uno specialista e tempo per parlare.',
+      cdi: 'Accoglienza diurna con assistenza, pasti e attività, per persone che vivono al domicilio ma hanno bisogno di supporto durante il giorno.',
+      stim: 'Percorso in piccoli gruppi con esercizi per mantenere memoria, attenzione e linguaggio, condotto da personale formato.',
+      sport: 'Punto di ascolto per familiari: informazioni sulla malattia, sui servizi del territorio e sulle pratiche da avviare.'
+    };
+    const sel = { nome: selRaw.nome, tags: selRaw.bisogni, desc: descr[selRaw.id] };
+
+    const mkNeed = (nm) => ({
+      nome: nm, sel: nm === bisogno,
+      bg: nm === bisogno ? '#F1EFEA' : '#FFFFFF',
+      fw: nm === bisogno ? 600 : 400,
+      pick: () => set({ bisogno: nm, needOpen: false })
+    });
+    const emersi = ['Socialità'].map(mkNeed);
+    const altri = ['Attività quotidiane', 'Memoria', 'Cura di sé', 'Informazioni sulla condizione', 'Stress di chi assiste', 'Sicurezza in casa', 'Alimentazione'].map(mkNeed);
+
+    return {
+      dom, san: SAN, soc: SOC, bisogno, needOpen, infoOpen,
+      isEnte: !svc, isSvc: !!svc,
+      needChevron: needOpen ? 'M6 15 L12 9 L18 15' : 'M6 9 L12 15 L18 9',
+      infoChevron: infoOpen ? 'M6 15 L12 9 L18 15' : 'M6 9 L12 15 L18 9',
+      toggleNeed: () => set({ needOpen: !needOpen }),
+      toggleInfo: () => set({ infoOpen: !infoOpen }),
+      back: () => set({ svc: null }),
+      svcPert, svcAltri,
+      nServizi: String(servizi.length),
+      nPert: String(svcPert.length),
+      nAltri: String(svcAltri.length),
+      perLabel: 'Per ' + bisogno.toLowerCase(),
+      tacche, punti, rami, relOpts, sel,
+      relBox: tint(7),
+      emersi, altri
+    };
+  }
+}
+</script>
+</body>
+</html>

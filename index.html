@@ -49,14 +49,20 @@
   </style>
 </head>
 <body>
-  <nav class="schede" id="schede">
+  <!-- Nascosta all'apertura: si cambia strumento con il tasto segreto (angolo in basso a sinistra)
+       o con il tasto S; il tasto H la fa ricomparire. -->
+  <nav class="schede" id="schede" hidden>
     <button type="button" class="scheda attiva" id="scheda-case-manager" data-strumento="case-manager">Case manager</button>
     <button type="button" class="scheda" id="scheda-caregiver" data-strumento="caregiver">Caregiver</button>
+    <!-- SCHEDA DI PROVA «Marker composto»: da togliere prima della presentazione (qui, l'iframe più
+         sotto e le due righe segnate «SCHEDA DI PROVA» nello script). -->
+    <button type="button" class="scheda" id="scheda-marker-composto" data-strumento="marker-composto">Marker composto</button>
   </nav>
 
-  <div class="pagine" id="pagine">
+  <div class="pagine a-tutto-schermo" id="pagine">
     <iframe id="iframe-case-manager" title="Case manager" src="case-manager.html"></iframe>
     <iframe id="iframe-caregiver" title="Caregiver" hidden></iframe>
+    <iframe id="iframe-marker-composto" title="Marker composto" hidden></iframe> <!-- SCHEDA DI PROVA -->
   </div>
 
   <script>
@@ -66,13 +72,15 @@
       const iframePerStrumento = {
         "case-manager": document.getElementById("iframe-case-manager"),
         "caregiver": document.getElementById("iframe-caregiver"),
+        "marker-composto": document.getElementById("iframe-marker-composto"), // SCHEDA DI PROVA
       };
       const bottonePerStrumento = {
         "case-manager": document.getElementById("scheda-case-manager"),
         "caregiver": document.getElementById("scheda-caregiver"),
+        "marker-composto": document.getElementById("scheda-marker-composto"), // SCHEDA DI PROVA
       };
       let strumentoAttivo = "case-manager";
-      let strisciaVisibile = true;
+      let strisciaVisibile = false; // la striscia parte nascosta
 
       // Ciascuna pagina resta nello stato in cui è stata lasciata: non si cambia mai il suo "src"
       // dopo il primo caricamento, si nasconde solo quella non attiva (vedi il brief). Il caregiver
@@ -115,8 +123,14 @@
         });
       }
       installaScorciatoie(window);
+      // Tasto segreto delle due pagine (vedi aggiungiTastoSegreto in js/condiviso.js): chiede di
+      // passare all'altro strumento. Solo messaggi delle nostre pagine (stessa origine).
+      window.addEventListener("message", (ev) => {
+        if (ev.origin !== window.location.origin || !ev.data || ev.data.tipo !== "cambia-strumento") return;
+        if (iframePerStrumento[ev.data.strumento]) mostraStrumento(ev.data.strumento);
+      });
       iframePerStrumento["case-manager"].addEventListener("load", () => installaScorciatoie(iframePerStrumento["case-manager"].contentWindow));
-      iframePerStrumento["caregiver"].addEventListener("load", () => installaScorciatoie(iframePerStrumento["caregiver"].contentWindow));
+      Object.values(iframePerStrumento).slice(1).forEach((iframe) => iframe.addEventListener("load", () => installaScorciatoie(iframe.contentWindow)));
     })();
   </script>
 </body>

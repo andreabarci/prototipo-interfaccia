@@ -123,19 +123,95 @@ async function richiediTempiAPiedi(origine, destinazioni, token) {
   return risultati;
 }
 
-// Linee del tempo (domicilio → marker), rette e tratteggiate — mai curve, per non confondersi con i
-// rami, che sono curvi (vedi campionaCurva sopra): natura diversa anche nel disegno, non solo nel
-// significato. Nel case manager appaiono in hover su un ramo; nel caregiver, in hover su un marker o
-// su una voce della tendina sinistra (vedi il brief). Colori provvisori. Il caregiver usa grafica
-// sua (appena arcuata, a trattini, vedi LINEA_MINUTI_* in js/caregiver.js): queste costanti valgono
-// solo per il case manager.
-const TEMPO_LINEA_COLORE = "#8a9299"; // grigio medio, neutro
-const TEMPO_LINEA_SPESSORE = 1.5;
-const TEMPO_LINEA_OPACITA = 0.9;
-const TEMPO_LINEA_TRATTO_PIENO = 4; // px
-const TEMPO_LINEA_TRATTO_VUOTO = 4; // px
-const TEMPO_LINEA_MARGINE = 4; // oltre al raggio del marker, perché non tocchi il bordo/l'icona
+// ---------- Linea dei minuti a piedi (domicilio → luogo) e la sua pillola: un solo componente per
+// le due pagine (nel case manager in hover su un ramo, il «triangolo» dei tempi; nel caregiver in
+// hover su un marker o su una voce, e sul marker selezionato). Leggermente arcuata, sempre con la
+// pancia verso l'alto, a trattini, grigio pieno; meno curva dei rami (RAMO_CURVATURA), per non
+// confondersi con loro. La pillola è .pillola-tempo in css/style.css: il suo contorno è nel grigio
+// con cui la linea appare a schermo (la mappa ammorbidisce le linee sottili, che sembrano più
+// chiare del loro colore): se cambi il colore qui, ritocca a occhio anche quello.
+const LINEA_MINUTI = {
+  curvatura: 0.11,
+  colore: "#474747",
+  opacita: 1,
+  spessore: 0.75, // px
+  tratto: 2, // px
+  vuoto: 2, // px
+};
+const TEMPO_LINEA_MARGINE = 4; // px fra la punta del luogo e la fine della linea
 const TEMPO_LINEA_DISSOLVENZA_MS = 150;
+
+// Sorgente e livello delle linee dei minuti; beforeId (facoltativo) = il livello sotto cui stanno.
+// Ogni linea ha un id numerico e compare in dissolvenza con il feature-state "comparso".
+function aggiungiLineeMinuti(map, id, beforeId) {
+  map.addSource(id, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+  map.addLayer({
+    id, type: "line", source: id, layout: { "line-cap": "butt", "line-join": "round" },
+    paint: {
+      "line-color": LINEA_MINUTI.colore,
+      "line-width": LINEA_MINUTI.spessore,
+      "line-dasharray": [LINEA_MINUTI.tratto / LINEA_MINUTI.spessore, LINEA_MINUTI.vuoto / LINEA_MINUTI.spessore],
+      "line-opacity": ["case", ["boolean", ["feature-state", "comparso"], false], LINEA_MINUTI.opacita, 0],
+      "line-opacity-transition": { duration: TEMPO_LINEA_DISSOLVENZA_MS },
+    },
+  }, beforeId);
+}
+
+// L'arco fra due luoghi [lon, lat] (di solito il domicilio e un ente): parte e arriva a pochi pixel
+// dai due punti, con la pancia sempre verso l'alto. Restituisce la lista dei punti.
+function arcoMinuti(map, coordDa, coordA) {
+  const seg = segmentoLineaTempo(map, coordDa, 0, coordA, 0);
+  const [a, b] = seg.geometry.coordinates;
+  // campionaCurva piega verso destra guardando da a verso b: andando verso est la destra è il sud,
+  // quindi in quel caso si disegna al contrario.
+  const versoEst = map.project(b).x > map.project(a).x;
+  return versoEst ? campionaCurva(b, a, LINEA_MINUTI.curvatura).reverse() : campionaCurva(a, b, LINEA_MINUTI.curvatura);
+}
+
+// Dove stanno le pillole su uno o più archi: a metà; se due risultano troppo vicine, scivolano lungo
+// il proprio arco in versi opposti finché non si separano.
+function posizioniPilloleMinuti(map, archi) {
+  const DISTANZA_MINIMA = 60; // px
+  const frazioni = archi.map(() => 0.5);
+  const punto = (i) => archi[i][Math.round((archi[i].length - 1) * frazioni[i])];
+  if (archi.length === 2) {
+    for (let tentativi = 0; tentativi < 6; tentativi++) {
+      const p = map.project(punto(0)), q = map.project(punto(1));
+      if (Math.hypot(p.x - q.x, p.y - q.y) >= DISTANZA_MINIMA) break;
+      frazioni[0] = Math.max(0.3, frazioni[0] - 0.06);
+      frazioni[1] = Math.min(0.7, frazioni[1] + 0.06);
+    }
+  }
+  return archi.map((_, i) => punto(i));
+}
+
+// Testo della pillola: «a 11 min»; «—» se il tempo non c'è; «…» mentre si sta calcolando.
+// sintetica: solo «11 min», senza la «a» (nel case manager, strumento per professionisti).
+function testoMinuti(minuti, { inCalcolo = false, sintetica = false } = {}) {
+  if (inCalcolo) return "…";
+  if (minuti == null) return "—";
+  return sintetica ? `${minuti} min` : `a ${minuti} min`;
+}
+
+// Una pillola dei minuti sulla mappa, pronta e invisibile finché non serve. Sta dentro un
+// contenitore: Mapbox scrive un'opacità in linea sull'elemento del marker, che vincerebbe sulla
+// classe .mostra. sintetica: senza l'omino che cammina (nel case manager; il testo lo decide
+// testoMinuti). Per il resto la pillola è identica nelle due pagine.
+function creaPillolaMinuti(map, { sintetica = false } = {}) {
+  const pillola = Object.assign(document.createElement("div"), { className: "pillola-tempo" });
+  const contenitore = Object.assign(document.createElement("div"), { className: "pillola-contenitore" });
+  contenitore.append(pillola);
+  const etichetta = new mapboxgl.Marker({ element: contenitore, anchor: "center" }).setLngLat([0, 0]).addTo(map);
+  return {
+    mostra(lngLat, testo) {
+      pillola.innerHTML = sintetica ? `<span class="pillola-tempo__testo">${testo}</span>` : pillolaTempoHtml(testo);
+      etichetta.setLngLat(lngLat);
+      pillola.classList.add("mostra");
+    },
+    sposta(lngLat) { etichetta.setLngLat(lngLat); },
+    nascondi() { pillola.classList.remove("mostra"); },
+  };
+}
 
 // Il punto sul segmento coordCentro→coordAltro, spostato di raggioPx pixel verso l'altro estremo: è
 // dove la linea deve iniziare o fermarsi, al bordo del marker e non al centro.
@@ -149,8 +225,8 @@ function puntoAlBordo(map, coordCentro, coordAltro, raggioPx) {
   return [lngLat.lng, lngLat.lat];
 }
 
-// Segmento di linea del tempo fra due marker (di solito il domicilio e un ente), fermo al bordo di
-// entrambi più TEMPO_LINEA_MARGINE: una GeoJSON Feature pronta per una source "tempo-linee"/"tempo-linea".
+// Segmento retto fra due punti, fermo a raggioA/raggioB (+ TEMPO_LINEA_MARGINE) pixel da ciascuno:
+// una GeoJSON Feature. Serve ad arcoMinuti per gli estremi dell'arco.
 function segmentoLineaTempo(map, coordA, raggioA, coordB, raggioB) {
   return {
     type: "Feature",
@@ -177,6 +253,86 @@ function iconaPersonaCheCammina() {
 // Markup di un'etichetta su una linea del tempo: icona + testo (vedi .pillola-tempo in css/style.css).
 function pillolaTempoHtml(testo) {
   return iconaPersonaCheCammina() + `<span class="pillola-tempo__testo">${testo}</span>`;
+}
+
+// Raggio in px a uno zoom qualsiasi, fra le fermate di zoom 10 e 14 (come l'interpolazione lineare
+// di Mapbox, bloccata oltre i due estremi). fermate = { 10: px, 14: px }.
+const raggioAZoom = (fermate, zoom) => {
+  const t = Math.max(0, Math.min(1, (zoom - 10) / 4));
+  return fermate[10] + (fermate[14] - fermate[10]) * t;
+};
+
+// ---------- Fumetto «servizio presso ente», comune alle due pagine (aspetto: .popup-servizio in
+// css/style.css; contenuto: fumettoServizio qui sotto). Simmetrico, con la punta al centro di un lato
+// del marker: esce sopra, sotto, a destra o a sinistra, dal lato che copre meno le linee (minuti e
+// rami) che arrivano al marker; a parità, sopra. Evita i lati in cui uscirebbe dalla mappa.
+const FUMETTO_LATI = [ // "anchor" di Mapbox = il lato del fumetto agganciato al marker
+  { anchor: "bottom", v: [0, -1] }, // fumetto sopra
+  { anchor: "top", v: [0, 1] }, // sotto
+  { anchor: "left", v: [1, 0] }, // a destra
+  { anchor: "right", v: [-1, 0] }, // a sinistra
+];
+const FUMETTO_MARGINE_BASSO = 60; // px in fondo alla mappa da lasciare liberi (comandi in basso)
+const FUMETTO_SOTTO_AGO = 4; // px fra la punta dell'ago e il fumetto, quando esce sotto una puntina
+
+function creaFumetto(map) {
+  const popup = new mapboxgl.Popup({
+    closeButton: false, closeOnClick: false, focusAfterOpen: false, anchor: "bottom", className: "popup-servizio",
+  });
+
+  function lato(p, testa, ingombro, linee) {
+    const raggio = testa.raggio;
+    // Direzioni (dal luogo) delle linee che partono o arrivano qui: un punto un po' dentro la linea.
+    const direzioni = [];
+    for (const c of linee) {
+      for (const [capo, verso] of [[0, 1], [c.length - 1, -1]]) {
+        const q0 = map.project(c[capo]);
+        if (Math.hypot(q0.x - p.x, q0.y - p.y) > raggio + 12) continue;
+        const q = map.project(c[Math.min(c.length - 1, Math.max(0, capo + verso * Math.max(1, Math.round(c.length * 0.15))))]);
+        const d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d > 0) direzioni.push([(q.x - p.x) / d, (q.y - p.y) / d]);
+      }
+    }
+    const { width: W, height: H } = map.getCanvas().getBoundingClientRect();
+    const sotto = testa.altezza > 0 ? FUMETTO_SOTTO_AGO : raggio;
+    const fuori = {
+      bottom: p.y - testa.altezza - raggio - ingombro.altezza < 0,
+      top: p.y + sotto + ingombro.altezza > H - FUMETTO_MARGINE_BASSO,
+      left: p.x + raggio + ingombro.larghezza > W,
+      right: p.x - raggio - ingombro.larghezza < 0,
+    };
+    let migliore = null;
+    for (const l of FUMETTO_LATI) {
+      // Quanto il lato "guarda" verso la linea più vicina: 1 = proprio sopra, −1 = dalla parte opposta.
+      let punteggio = direzioni.reduce((m, d) => Math.max(m, l.v[0] * d[0] + l.v[1] * d[1]), -1);
+      if (fuori[l.anchor]) punteggio += 2;
+      if (!migliore || punteggio < migliore.punteggio - 0.01) migliore = { anchor: l.anchor, punteggio };
+    }
+    return migliore.anchor;
+  }
+
+  return {
+    // coord: [lon, lat] del luogo. testa: { altezza, raggio } in px: quanto il centro del marker sta
+    // sopra il luogo (0 per un marker piatto, l'ago per una puntina) e il suo raggio, bordo compreso.
+    // linee: le linee (liste di [lon, lat]) da non coprire.
+    mostra(coord, html, testa, linee = []) {
+      const sotto = testa.altezza > 0 ? FUMETTO_SOTTO_AGO : testa.raggio;
+      popup.setOffset({
+        bottom: [0, -(testa.altezza + testa.raggio)],
+        top: [0, sotto],
+        left: [testa.raggio, -testa.altezza],
+        right: [-testa.raggio, -testa.altezza],
+      });
+      // Prima lo si disegna per misurarlo, poi si sceglie il lato (Mapbox non ha un setAnchor: si
+      // cambia l'opzione e si riposiziona).
+      popup.options.anchor = "bottom";
+      popup.setLngLat(coord).setHTML(html).addTo(map);
+      const r = popup.getElement().getBoundingClientRect();
+      const a = lato(map.project(coord), testa, { larghezza: r.width, altezza: r.height }, linee);
+      if (a !== "bottom") { popup.options.anchor = a; popup.setLngLat(coord); }
+    },
+    nascondi() { popup.remove(); },
+  };
 }
 
 // Contenuto del fumetto di un servizio selezionato (servizio presso ente): il servizio al primo
@@ -207,4 +363,19 @@ function cerchioGeodetico(lat, lon, raggioMetri, punti = 64) {
     coordinate.push([lon + dLon, lat + dLat]);
   }
   return { type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [coordinate] } };
+}
+
+// ---------- Tasto segreto: una zona cliccabile invisibile di 40×40 px nell'angolo in basso a sinistra
+// della pagina, che porta all'altro strumento (case manager ↔ caregiver). Nessun segno, cursore
+// normale. Dentro la presentazione (index.html) chiede a lei di cambiare scheda, così ciascuna
+// pagina resta nello stato in cui è; aperta da sola, va direttamente all'altra pagina.
+function aggiungiTastoSegreto(destinazione) {
+  const zona = document.createElement("div");
+  zona.className = "tasto-segreto";
+  zona.setAttribute("aria-hidden", "true");
+  zona.addEventListener("click", () => {
+    if (window.parent !== window) window.parent.postMessage({ tipo: "cambia-strumento", strumento: destinazione }, "*");
+    else window.location.href = destinazione + ".html";
+  });
+  document.body.appendChild(zona);
 }

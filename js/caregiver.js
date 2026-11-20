@@ -3,48 +3,35 @@
 // modifica js/app.js. Disposizione: tendina sinistra sempre aperta con due tab («I miei luoghi»,
 // «Consigliati») o la scheda del marker, mappa al centro, chat nella tendina destra (comprimibile).
 
-// ---------- marker: stati e grafica provvisoria, tutti qui perché Andrea possa ritoccarli a mano
-// senza toccare la logica. Cinque stati (vedi il brief): salvato, consigliato, scoperto,
-// selezionato, attenuato. Salvato e scoperto sono cerchi, consigliato è un rombo (forma diversa dai
-// salvati, come chiede il brief); il selezionato tiene la sua forma e prende un bordo nero.
-// Nome dell'ente accanto al marker non pertinente in hover: stesso carattere, taglia e contorno
-// delle etichette della mappa (vedi strumenti/crea_stile_caregiver.py), colore del macrodominio.
-const NOME_ATTENUATO_CARATTERE = ["Open Sans Regular", "Arial Unicode MS Regular"];
-const NOME_ATTENUATO_DIMENSIONE = 11; // px, come i luoghi di contesto della mappa
-const NOME_ATTENUATO_CONTORNO = "#F6F1E7"; // il fondo della mappa
-const NOME_ATTENUATO_CONTORNO_SPESSORE = 1.2;
-const NOME_ATTENUATO_MARGINE = 4; // px fra il bordo del marker e il nome
-const MARKER_RAGGIO_ATTENUATO = 4 * 1.2; // il resto della rete: piccolo, fisso (4 px + 20%)
-// Misure riprese dal case manager (js/app.js), copiate qui perché le due pagine non condividono
-// queste costanti, e poi ridotte tutte insieme di SCALA_CAREGIVER (raggi e bordi; non l'ingrandimento
-// in hover, che è un rapporto). Il raggio cresce con lo zoom fra le due fermate 10 e 14, come là.
-const SCALA_CAREGIVER = 0.7 * 1.2; // −30% rispetto al marker cliccato del case manager, poi +20%
-const MARKER_RAGGIO = { 10: 8.75 * SCALA_CAREGIVER, 14: 17.5 * SCALA_CAREGIVER }; // RAGGIO_GRANDE del case manager
-const MARKER_FATTORE_HOVER = 1.15; // = FATTORE_HOVER_MARKER: in hover, e da selezionato
-const RAGGIO_DOMICILIO = { 10: 8.75 * SCALA_CAREGIVER, 14: 17.5 * SCALA_CAREGIVER }; // RAGGIO_GRANDE
-const BORDO_DOMICILIO = 3 * SCALA_CAREGIVER; // BORDO_GRANDE
-const SCALA_ICONA_DOMICILIO = 0.55; // = SCALA_ICONA
-const MARKER_BORDO = 3 * SCALA_CAREGIVER; // BORDO_GRANDE, bianco: salvato e consigliato
-const MARKER_ROMBO_RAPPORTO = 1.4; // mezza diagonale del rombo / raggio del cerchio, a pari area visiva
-const MARKER_OPACITA_ATTENUATA = 1; // pieni, nessuna trasparenza: si distinguono solo per la taglia
-const MARKER_OPACITA_SCOPERTO = 0.85; // pieno ma un poco meno dei salvati, senza bordo
-const MARKER_BORDO_SELEZIONATO = 3 * SCALA_CAREGIVER;
-const MARKER_COLORE_SELEZIONATO = "#1d2428";
-const MARKER_SCALA_ICONA = 0.55; // quanta parte del diametro occupa l'icona di categoria
-// Marker dei servizi a puntina: la testa (cerchio o rombo, con l'icona) poggia su un ago, la cui
-// punta cade esattamente sulle coordinate. I marker non pertinenti restano cerchietti piatti.
-const AGO_LUNGHEZZA = 12; // px visibili sotto la testa, alla taglia di zoom 14 (poi scala con il marker)
+// ---------- marker: allineati al case manager (js/app.js, che resta il riferimento). Tutti gli enti
+// sono puntini chiusi della stessa taglia; quelli accesi (proposta del case manager attiva, luoghi
+// salvati, pacchetto della chat, collegati da un ramo) a piena intensità, gli altri attenuati. Senza
+// niente di acceso, tutti i puntini sono accesi. Al clic il marker si apre: un cerchio con l'icona,
+// centrato sul luogo, senza gambetta e senza anello a tacche (l'anello resta al case manager).
+const PUNTINO_RAGGIO = 8; // px, come PUNTINO_RAGGIO del case manager
+const OPACITA_ATTENUATA = 0.3; // più visibili che nel case manager (0,1): sulla mappa del caregiver sparivano
+// Il marker aperto: stesse misure del case manager (cresce con lo zoom, fra le fermate 10 e 14).
+const TESTA_RAGGIO = { 10: 8.75 * 0.84, 14: 17.5 * 0.84 };
+const TESTA_BORDO = 3 * 0.84; // bordo bianco
+const TESTA_SCALA_ICONA = 0.55;
+// Il domicilio resta la puntina nera con la casa.
+const SCALA_CAREGIVER = 0.7 * 1.2;
+const RAGGIO_DOMICILIO = { 10: 8.75 * SCALA_CAREGIVER, 14: 17.5 * SCALA_CAREGIVER };
+const BORDO_DOMICILIO = 3 * SCALA_CAREGIVER;
+const SCALA_ICONA_DOMICILIO = 0.55;
+const AGO_LUNGHEZZA = 12; // px, la gambetta del domicilio
 const AGO_SPESSORE = 1.5; // px
-const AGO_COLORE = "#5C554D"; // il marrone scuro del testo delle pillole
-// Distanza fra la punta dell'ago e il centro della testa, alla taglia di zoom 14: fissa per forma
-// (il bordo più spesso, quello del selezionato, così la testa non salta quando lo si seleziona).
-const altezzaTesta = (forma) =>
-  (forma === "rombo" ? MARKER_RAGGIO[14] * MARKER_ROMBO_RAPPORTO : MARKER_RAGGIO[14]) + MARKER_BORDO_SELEZIONATO + AGO_LUNGHEZZA;
-// Raggio in px a uno zoom qualsiasi, fra le fermate 10 e 14 (come l'interpolazione di Mapbox).
-const raggioAZoom = (fermate, zoom) => {
-  const t = Math.max(0, Math.min(1, (zoom - 10) / 4));
-  return fermate[10] + (fermate[14] - fermate[10]) * t;
+const AGO_COLORE = "#5C554D";
+// Foto degli enti (cartella foto/), per id ente: le stesse del case manager (FOTO_ENTI in js/app.js,
+// da tenere allineate finché non andranno in un file comune). Gli altri hanno il segnaposto.
+const FOTO_DEGLI_ENTI = {
+  E273: "foto/biblioteca-villapizzone.jpeg",
+  E203: "foto/cdi-beauvoir.jpg",
+  E250: "foto/biblioteca-gallaratese.jpg",
+  E259: "foto/biblioteca-dergano-bovisa.jpg",
+  E357: "foto/gdc-stella.jpg", // Gruppo di cammino ATS — Parco Montestella (ritagliata in 4:3, 800×600)
 };
+// raggioAZoom (raggio in px a uno zoom qualsiasi) è in js/condiviso.js.
 
 // Rami verso i legami del servizio selezionato: curve come nel case manager (campionaCurva,
 // condivisa), con una grafica propria e provvisoria. «Simili a questo» pieno, «Anche per te»
@@ -70,18 +57,8 @@ const CHAT_MS_PER_PAROLA = 55;
 // Un cerchio geometrico, dichiaratamente approssimato (non un'isocrona): raggio = minuti × la velocità
 // media implicita nei tempi già calcolati con la Mapbox Matrix API (data/tempi_domicilio_iniziale.json).
 // Agisce solo sul piano cartografico: non filtra marker né servizi.
-// Linea dei minuti a piedi (domicilio → marker), solo in questa pagina: leggermente arcuata e
-// sempre convessa verso l'alto (un arco, qualunque sia la direzione), a trattini, spessa come il
-// contorno della pillola, di colore doppio rispetto alla traccia del cerchio (stessa opacità, grigio più scuro: il
-// doppio di "inchiostro" sul fondo). La pillola è in css/style.css (.pillola-tempo--caregiver): il suo
-// contorno è nel grigio con cui la linea appare a schermo (più chiaro del suo colore, perché la
-// mappa ammorbidisce i bordi delle linee sottili): se cambi LINEA_MINUTI_COLORE, ritoccalo a occhio.
-const LINEA_MINUTI_CURVATURA = 0.11; // i rami ne hanno 0,15: questa è un po' meno arcuata
-const LINEA_MINUTI_COLORE = "#474747"; // doppio del grigio della traccia del cerchio (#A3A3A3)
-const LINEA_MINUTI_OPACITA = 1; // nessuna trasparenza
-const LINEA_MINUTI_SPESSORE = 0.75; // px
-const LINEA_MINUTI_TRATTO = 2; // px
-const LINEA_MINUTI_VUOTO = 2; // px
+// La linea dei minuti a piedi e la sua pillola sono comuni alle due pagine: vedi LINEA_MINUTI in
+// js/condiviso.js.
 // Inclinazione della vista: 0 = dritta dall'alto (la vista standard); fino a 60 = «a volo d'uccello».
 const VISTA_INCLINAZIONE = 0; // gradi
 const METRI_AL_MINUTO = 83;
@@ -108,6 +85,7 @@ const metriPerMinuti = (minuti) => minuti * METRI_AL_MINUTO;
 const DOMICILIO = DOMICILIO_INIZIALE;
 
 window.startApp = async function () {
+  aggiungiTastoSegreto("case-manager"); // in basso a sinistra, invisibile: porta al case manager
   const mapEl = document.getElementById("map");
   const appEl = document.getElementById("app");
   const panelDx = document.getElementById("panel-luoghi");
@@ -187,14 +165,14 @@ window.startApp = async function () {
   const cm = scenario.pacchetto_case_manager;
   const stato = {
     salvati: [...scenario.salvati],
-    tab: "luoghi", // «I miei luoghi» attivo all'apertura
+    tab: "consigliati", // «Consigliati» attivo all'apertura, con la proposta del case manager spenta
     novitaConsigliati: true, // la proposta del case manager arriva come novità
     pacchetti: [{
       id: "case-manager", tipo: "case-manager", nome: cm.titolo, data: cm.data, testo: cm.commento,
       voci: cm.servizi.map((v) => ({ servizio: v.servizio, bisogni: [v.bisogno] })),
-      aperto: true, acceso: true,
+      aperto: true, acceso: false,
     }],
-    scheda: null, // { enteId, servizi: [id, ...] } quando la tendina sinistra mostra la scheda del marker
+    scheda: null, // { enteId, servizio } quando la tendina sinistra mostra la scheda dell'ente (servizio: null) o del servizio
     tipoRelazione: null, // "simili" | "anche_per_te" | null (rami spenti)
   };
   const isSalvato = (id) => stato.salvati.includes(id);
@@ -203,19 +181,27 @@ window.startApp = async function () {
   // Enti "scoperti" dalla relazione attiva (sono scoperti solo se non sono già salvati o consigliati).
   let scopertiRelazione = new Map(); // enteId -> servizio della relazione
 
-  // Stato di ogni ente sulla mappa, in ordine di precedenza: salvato (sempre visibile, in tutti e due
-  // i tab), consigliato (solo con «Consigliati» attivo e il pacchetto acceso), scoperto, attenuato.
-  function statoEnti() {
-    const st = new Map();
-    for (const id of stato.salvati) st.set(enteDi(id), "salvato");
+  // Quali enti sono accesi: con «Consigliati» i servizi dei pacchetti attivi, con «I miei luoghi» i
+  // salvati; in più gli enti collegati da un ramo. Se niente è attivo (all'apertura: «Consigliati» con
+  // la proposta spenta) non si attenua nulla: tutti i puntini sono accesi.
+  function luciEnti() {
+    const accesi = new Set();
+    let attenua = false;
     if (stato.tab === "consigliati") {
       for (const p of stato.pacchetti) {
         if (!p.acceso) continue;
-        for (const v of vociVisibili(p)) if (!st.has(enteDi(v.servizio))) st.set(enteDi(v.servizio), "consigliato");
+        attenua = true;
+        for (const v of p.voci) accesi.add(enteDi(v.servizio));
       }
+    } else {
+      attenua = true;
+      for (const id of stato.salvati) accesi.add(enteDi(id));
     }
-    for (const enteId of scopertiRelazione.keys()) if (!st.has(enteId)) st.set(enteId, "scoperto");
-    return st;
+    if (scopertiRelazione.size) {
+      attenua = true;
+      for (const enteId of scopertiRelazione.keys()) accesi.add(enteId);
+    }
+    return { accesi, attenua };
   }
 
   // ---------- mappa
@@ -225,18 +211,30 @@ window.startApp = async function () {
   const scartoLat = Math.max(...entiScenario.map((id) => Math.abs(enteById[id].lat - DOMICILIO.lat)));
   mapboxgl.accessToken = CONFIG.mapboxToken;
   const map = new mapboxgl.Map({
-    container: "map", style: CONFIG.mapStyleCaregiver,
+    container: "map", style: CONFIG.mapStyle,
     bounds: [[DOMICILIO.lon - scartoLon, DOMICILIO.lat - scartoLat], [DOMICILIO.lon + scartoLon, DOMICILIO.lat + scartoLat]],
     fitBoundsOptions: { padding: 50, pitch: VISTA_INCLINAZIONE },
     pitch: VISTA_INCLINAZIONE,
     minZoom: CONFIG.minZoom, maxZoom: CONFIG.maxZoom, language: "it",
-    attributionControl: false,
+    attributionControl: false, logoPosition: "bottom-right", // l'angolo in basso a sinistra è della legenda
   });
   map.addControl(new mapboxgl.NavigationControl({ showCompass: false }), "top-right");
   // Note di Mapbox e OpenStreetMap in forma compatta: un pulsante «i» che le apre al clic. Non si
   // possono togliere del tutto (le chiedono le condizioni d'uso di Mapbox e la licenza di OSM).
   map.addControl(new mapboxgl.AttributionControl({ compact: true }), "bottom-right");
   let mappaPronta = false;
+
+  // Legenda in basso a sinistra, con lo sfondo, come nel case manager (stesse classi .cm-legenda).
+  const iconaCasa = (colore, lato) => `<svg width="${lato}" height="${lato}" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 L12 4 L21 11 V20 H14 V14 H10 V20 H3 Z" fill="${colore}"></path></svg>`;
+  document.getElementById("legenda").innerHTML = `
+    <div class="cm-legenda__riga">
+      <span class="cm-legenda__voce"><span class="cm-legenda__punto" style="background:${COLORI.sanitario}"></span>Sanitario</span>
+      <span class="cm-legenda__voce"><span class="cm-legenda__punto" style="background:${COLORI.sociosanitario}"></span>Sociosanitario</span>
+      <span class="cm-legenda__voce"><span class="cm-legenda__punto" style="background:${COLORI.sociale}"></span>Sociale</span>
+    </div>
+    <div class="cm-legenda__riga cm-legenda__riga--seconda">
+      <span class="cm-legenda__voce"><span class="cm-legenda__casa">${iconaCasa("#FFFFFF", 8)}</span>Domicilio</span>
+    </div>`;
 
   const featureIndexPerEnte = {};
   sullaMappa.forEach((e, i) => { featureIndexPerEnte[e.id] = i; });
@@ -250,97 +248,45 @@ window.startApp = async function () {
     })),
   };
 
-  // Ente in hover (marker, voce di una lista, nome nella chat): il suo marker si ingrandisce.
-  let enteInHover = null;
   const immaginiIcone = {}; // icone di categoria già caricate, per nome
-  // Nome dell'immagine di un marker in vista: forma (cerchio, o rombo se consigliato), colore,
-  // bordo (selezionato nero, salvato e consigliato bianco, scoperto senza) e icona di categoria.
-  function nomeImmagineMarker(e, s, selezionato) {
-    const forma = s === "consigliato" ? "rombo" : "cerchio";
-    const bordo = selezionato ? "sel" : s === "scoperto" ? "nudo" : "bianco";
-    return ["marker", forma, chiaveColore(e), bordo, ICONA_PER_CATEGORIA[e.categoria_origine] || ""].join("|");
-  }
-  // Le proprietà che decidono l'aspetto di ogni marker, ricalcolate a ogni cambio di stato.
+  // Le proprietà che decidono l'aspetto di ogni marker, ricalcolate a ogni cambio di stato: acceso o
+  // attenuato, e aperto (l'ente della scheda) con l'immagine della sua testa.
   function aggiornaMappa() {
-    const st = statoEnti();
-    const selezionatoId = stato.scheda ? stato.scheda.enteId : null;
+    const { accesi, attenua } = luciEnti();
+    const apertoId = stato.scheda ? stato.scheda.enteId : null;
     for (const f of geojsonEnti.features) {
       const e = enteById[f.properties.id];
-      const s = st.get(e.id) || "attenuato";
-      const selezionato = e.id === selezionatoId;
-      const inVista = s !== "attenuato" || selezionato;
-      f.properties.stato = s;
-      f.properties.selezionato = selezionato;
-      // Ingrandito: in hover, e da selezionato resta così anche quando il cursore se ne va.
-      f.properties.ingrandito = inVista && (selezionato || e.id === enteInHover);
-      // Il marker in vista è un'immagine unica (forma, bordo e icona insieme): così due marker vicini
-      // si sovrappongono interi, senza che l'icona dell'uno finisca sopra la forma dell'altro.
-      f.properties.immagine = inVista ? nomeImmagineMarker(e, s, selezionato) : null;
+      f.properties.acceso = !attenua || accesi.has(e.id) || e.id === apertoId;
+      f.properties.aperto = e.id === apertoId;
+      f.properties.testa = e.id === apertoId ? ["testa", chiaveColore(e), ICONA_PER_CATEGORIA[e.categoria_origine] || ""].join("|") : null;
     }
     if (!mappaPronta) return;
-    for (const f of geojsonEnti.features) if (f.properties.immagine) assicuraImmagineMarker(f.properties.immagine);
+    for (const f of geojsonEnti.features) if (f.properties.testa) assicuraTesta(f.properties.testa);
     map.getSource("enti").setData(geojsonEnti);
   }
   aggiornaMappa();
-  const inVista = (f) => f.properties.stato !== "attenuato" || f.properties.selezionato;
 
-  // Disegna su canvas l'immagine di un marker, alla taglia di zoom 14 (poi scalata con icon-size).
-  function assicuraImmagineMarker(nome) {
+  // La testa del marker aperto, disegnata su canvas alla taglia di zoom 14 (poi scalata con lo zoom):
+  // bordo bianco, cerchio nel colore del dominio, icona di categoria. Come nel case manager.
+  function assicuraTesta(nome) {
     if (map.hasImage(nome)) return;
-    const [, forma, chiave, bordoTipo, icona] = nome.split("|");
+    const [, chiave, icona] = nome.split("|");
     const colore = chiave === "altro" ? COLORE_CLUSTER : COLORI[chiave];
-    const bordo = bordoTipo === "sel" ? MARKER_BORDO_SELEZIONATO : bordoTipo === "bianco" ? MARKER_BORDO : 0;
-    const coloreBordo = bordoTipo === "sel" ? MARKER_COLORE_SELEZIONATO : "#ffffff";
-    const PR = 3; // definizione alta: l'immagine viene anche ingrandita in hover
-    const R = MARKER_RAGGIO[14];
-    const meta = R * MARKER_ROMBO_RAPPORTO;
-    // Larghezza: la testa più grande possibile; altezza: dalla cima della testa alla punta dell'ago,
-    // che è il bordo inferiore dell'immagine (icon-anchor "bottom" = le coordinate).
-    const lato = Math.ceil((meta + MARKER_BORDO_SELEZIONATO + 1) * 2);
-    const c = lato / 2;
-    const altezza = Math.ceil(c + altezzaTesta(forma));
+    const PR = 3, R = TESTA_RAGGIO[14];
+    const lato = Math.ceil((R + TESTA_BORDO + 1) * 2), c = lato / 2;
     const canvas = document.createElement("canvas");
-    canvas.width = lato * PR;
-    canvas.height = altezza * PR;
+    canvas.width = canvas.height = lato * PR;
     const ctx = canvas.getContext("2d");
     ctx.scale(PR, PR);
-    const cy = altezza - altezzaTesta(forma); // centro della testa
-    // L'ago, sotto la testa.
-    ctx.beginPath();
-    ctx.moveTo(c, cy);
-    ctx.lineTo(c, altezza);
-    ctx.lineWidth = AGO_SPESSORE;
-    ctx.strokeStyle = AGO_COLORE;
-    ctx.stroke();
-    ctx.translate(0, cy - c); // da qui in poi la testa si disegna come prima, centrata in (c, c)
-    ctx.beginPath();
-    if (forma === "rombo") {
-      ctx.moveTo(c, c - meta); ctx.lineTo(c + meta, c); ctx.lineTo(c, c + meta); ctx.lineTo(c - meta, c);
-      ctx.closePath();
-      ctx.fillStyle = colore;
-      ctx.fill();
-      if (bordo) { ctx.lineJoin = "round"; ctx.lineWidth = bordo; ctx.strokeStyle = coloreBordo; ctx.stroke(); }
-    } else {
-      // Come il circle-stroke di Mapbox: il bordo sta tutto fuori dal raggio.
-      if (bordo) { ctx.arc(c, c, R + bordo, 0, 2 * Math.PI); ctx.fillStyle = coloreBordo; ctx.fill(); ctx.beginPath(); }
-      ctx.arc(c, c, R, 0, 2 * Math.PI);
-      ctx.fillStyle = colore;
-      ctx.fill();
-    }
+    ctx.beginPath(); ctx.arc(c, c, R + TESTA_BORDO, 0, 2 * Math.PI); ctx.fillStyle = "#ffffff"; ctx.fill();
+    ctx.beginPath(); ctx.arc(c, c, R, 0, 2 * Math.PI); ctx.fillStyle = colore; ctx.fill();
     const img = immaginiIcone[icona];
-    if (img) {
-      const d = 2 * R * MARKER_SCALA_ICONA;
-      ctx.drawImage(img, c - d / 2, c - d / 2, d, d);
-    }
+    if (img) { const d = 2 * R * TESTA_SCALA_ICONA; ctx.drawImage(img, c - d / 2, c - d / 2, d, d); }
     map.addImage(nome, ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio: PR });
   }
 
-  const popupServizio = new mapboxgl.Popup({
-    closeButton: false, closeOnClick: false, focusAfterOpen: false,
-    // Simmetrico, con la punta al centro di un lato del marker: quale lato lo sceglie
-    // ancoraggioFumetto, la distanza mostraFumetto.
-    anchor: "bottom", className: "popup-servizio popup-servizio--caregiver",
-  });
+  // Fumetto «servizio presso ente»: componente comune (vedi creaFumetto in js/condiviso.js).
+  const fumetto = creaFumetto(map);
 
   // ---------- il cerchio del quartiere: velo scuro fuori, mappa normale dentro
   let minutiQuartiere = QUARTIERE_MINUTI_INIZIALI;
@@ -418,18 +364,8 @@ window.startApp = async function () {
       },
     });
 
-    // Linea dei minuti (domicilio → marker): appena arcuata, a trattini, sotto rami e marker.
-    map.addSource("tempo-linea", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-    map.addLayer({
-      id: "tempo-linea", type: "line", source: "tempo-linea", layout: { "line-cap": "butt", "line-join": "round" },
-      paint: {
-        "line-color": LINEA_MINUTI_COLORE,
-        "line-width": LINEA_MINUTI_SPESSORE,
-        "line-dasharray": [LINEA_MINUTI_TRATTO / LINEA_MINUTI_SPESSORE, LINEA_MINUTI_VUOTO / LINEA_MINUTI_SPESSORE],
-        "line-opacity": ["case", ["boolean", ["feature-state", "comparso"], false], LINEA_MINUTI_OPACITA, 0],
-        "line-opacity-transition": { duration: TEMPO_LINEA_DISSOLVENZA_MS },
-      },
-    });
+    // Linea dei minuti (domicilio → marker), sotto rami e marker: componente comune (condiviso.js).
+    aggiungiLineeMinuti(map, "tempo-linea");
 
     // Rami: archi curvi fra i marker, sopra le linee del tempo, sotto i marker.
     map.addSource("rami", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
@@ -489,82 +425,28 @@ window.startApp = async function () {
       } catch (err) { console.warn(err.message); }
     }));
 
-    // Enti: cerchietti attenuati sotto, marker in vista sopra (un'immagine ciascuno). Tutta la
-    // rete resta visibile in ogni tab: gli enti senza un altro stato sono attenuati, dentro e fuori dal
-    // cerchio allo stesso modo (il cerchio agisce solo sul piano cartografico).
+    // Enti: puntini chiusi (accesi o attenuati) e, sopra, il marker aperto. Tutta la rete resta
+    // visibile in ogni tab, dentro e fuori dal cerchio allo stesso modo (il cerchio agisce solo sul
+    // piano cartografico).
     map.addSource("enti", { type: "geojson", data: geojsonEnti });
-    const ingrandito = ["boolean", ["get", "ingrandito"], false];
-    // Scala dell'immagine del marker (disegnata alla taglia di zoom 14), per fermata di zoom: base,
-    // oppure × MARKER_FATTORE_HOVER se ingrandito. Lo scatto è immediato, senza transizione, come nel
-    // case manager. Lo zoom deve restare il livello più esterno dell'espressione (regola di Mapbox).
-    const fermata = (z) => ["case", ingrandito,
-      (MARKER_RAGGIO[z] / MARKER_RAGGIO[14]) * MARKER_FATTORE_HOVER, MARKER_RAGGIO[z] / MARKER_RAGGIO[14]];
     const coloreDominio = ["match", ["get", "macro_dominio"],
       "sanitario", COLORI.sanitario, "sociosanitario", COLORI.sociosanitario, "sociale", COLORI.sociale, COLORE_CLUSTER];
-    // Il marker non pertinente in hover (feature-state "hover"): un po' più grande, sempre cerchio
-    // senza icona, con il nome dell'ente accanto (livello "enti-nome", più sotto).
-    const attenuatoInHover = ["boolean", ["feature-state", "hover"], false];
     map.addLayer({
-      id: "enti-cerchio", type: "circle", source: "enti",
-      filter: ["==", ["typeof", ["get", "immagine"]], "null"],
+      id: "enti-punti", type: "circle", source: "enti",
       paint: {
-        "circle-radius": ["case", attenuatoInHover, MARKER_RAGGIO_ATTENUATO * MARKER_FATTORE_HOVER, MARKER_RAGGIO_ATTENUATO],
+        // Il marker aperto non ha puntino: al suo posto la testa (livello "enti-aperto").
+        "circle-radius": ["case", ["boolean", ["get", "aperto"], false], 0, PUNTINO_RAGGIO],
         "circle-color": coloreDominio,
-        "circle-opacity": MARKER_OPACITA_ATTENUATA,
+        "circle-opacity": ["case", ["boolean", ["get", "acceso"], true], 1, OPACITA_ATTENUATA],
       },
     });
     map.addLayer({
-      id: "enti-marker", type: "symbol", source: "enti",
-      filter: ["==", ["typeof", ["get", "immagine"]], "string"],
+      id: "enti-aperto", type: "symbol", source: "enti",
+      filter: ["==", ["typeof", ["get", "testa"]], "string"],
       layout: {
-        "icon-image": ["get", "immagine"],
-        "icon-size": ["interpolate", ["linear"], ["zoom"], 10, fermata(10), 14, fermata(14)],
-        "icon-anchor": "bottom", // la punta dell'ago sulle coordinate
+        "icon-image": ["get", "testa"],
+        "icon-size": ["interpolate", ["linear"], ["zoom"], 10, TESTA_RAGGIO[10] / TESTA_RAGGIO[14], 14, 1],
         "icon-allow-overlap": true, "icon-ignore-placement": true,
-        // Il marker ingrandito (hover o selezionato) sta sopra gli altri.
-        "symbol-sort-key": ["case", ingrandito, 1, 0],
-        "symbol-z-order": "source",
-      },
-      paint: { "icon-opacity": ["case", ["==", ["get", "stato"], "scoperto"], MARKER_OPACITA_SCOPERTO, 1] },
-    });
-    // Area sensibile al mouse: un cerchio invisibile grande quanto il marker. Le immagini, da sole,
-    // rispondono su un'area più piccola di quella che si vede. Stesso ordine dei marker (sort key).
-    // Sta sulla testa della puntina, sopra le coordinate: uno per forma, perché la testa del rombo
-    // è più alta. (Lo spostamento non può dipendere dal dato, solo dallo zoom.)
-    const raggioArea = (z) => ["case", ingrandito,
-      MARKER_RAGGIO[z] * MARKER_FATTORE_HOVER + MARKER_BORDO, MARKER_RAGGIO[z] + MARKER_BORDO];
-    for (const forma of ["cerchio", "rombo"]) {
-      const su = (z) => [0, -altezzaTesta(forma) * (MARKER_RAGGIO[z] / MARKER_RAGGIO[14])];
-      map.addLayer({
-        id: "enti-area-" + forma, type: "circle", source: "enti",
-        filter: ["all", ["==", ["typeof", ["get", "immagine"]], "string"],
-          [forma === "rombo" ? "==" : "!=", ["get", "stato"], "consigliato"]],
-        layout: { "circle-sort-key": ["case", ingrandito, 1, 0] },
-        paint: {
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10, raggioArea(10), 14, raggioArea(14)],
-          "circle-translate": ["interpolate", ["linear"], ["zoom"], 10, ["literal", su(10)], 14, ["literal", su(14)]],
-          "circle-opacity": 0,
-        },
-      });
-    }
-    map.addLayer({
-      id: "enti-nome", type: "symbol", source: "enti",
-      filter: ["==", ["typeof", ["get", "immagine"]], "null"],
-      layout: {
-        "text-field": ["get", "nome"],
-        "text-font": NOME_ATTENUATO_CARATTERE,
-        "text-size": NOME_ATTENUATO_DIMENSIONE,
-        "text-anchor": "left",
-        "text-justify": "left", // su due righe, allineate a sinistra verso il marker
-        "text-offset": [(MARKER_RAGGIO_ATTENUATO * MARKER_FATTORE_HOVER + NOME_ATTENUATO_MARGINE) / NOME_ATTENUATO_DIMENSIONE, 0],
-        "text-max-width": 14,
-        "text-allow-overlap": true, "text-ignore-placement": true,
-      },
-      paint: {
-        "text-color": coloreDominio,
-        "text-halo-color": NOME_ATTENUATO_CONTORNO,
-        "text-halo-width": NOME_ATTENUATO_CONTORNO_SPESSORE,
-        "text-opacity": ["case", attenuatoInHover, 1, 0],
       },
     });
 
@@ -573,70 +455,38 @@ window.startApp = async function () {
     aggiornaMappa();
     if (stato.scheda) mostraLinea(lineaScelta, stato.scheda.enteId);
 
-    // Hover e clic sui marker in vista (gli attenuati non rispondono).
-    const LAYER_MARKER = ["enti-area-cerchio", "enti-area-rombo"];
-    const markerSotto = (ev) => (ev.features || []).find(inVista);
-    map.on("mousemove", LAYER_MARKER, (ev) => {
-      const f = markerSotto(ev);
-      map.getCanvas().style.cursor = f ? "pointer" : "";
-      if (!f) { spegniEvidenza(); return; }
+    // Hover su un puntino: il fumetto con il nome dell'ente (e la linea dei minuti); clic: si apre la
+    // scheda dell'ente. Su un punto vuoto il clic chiude la scheda e torna ai tab.
+    map.on("mousemove", "enti-punti", (ev) => {
+      const f = ev.features[0];
+      map.getCanvas().style.cursor = "pointer";
       if (evidenza !== f.properties.id) evidenzia(f.properties.id, { linea: true, fumetto: true });
     });
-    map.on("mouseleave", LAYER_MARKER, () => {
+    map.on("mouseleave", "enti-punti", () => {
       map.getCanvas().style.cursor = "";
       spegniEvidenza();
     });
     mapEl.addEventListener("mouseleave", spegniEvidenza); // uscendo dalla mappa, anche sopra il fumetto
-    map.on("click", LAYER_MARKER, (ev) => {
-      const f = markerSotto(ev);
-      if (!f) return;
-      const servizi = serviziInVistaAEnte(f.properties.id);
-      if (servizi.length) apriScheda(f.properties.id, servizi, { rami: true });
-    });
-    // Hover su un marker non pertinente: si ingrandisce e mostra il nome dell'ente. Al clic si apre
-    // come gli altri (marker con icona e scheda nella tendina sinistra, con tutti i servizi presso
-    // l'ente). Se sotto il cursore c'è anche un marker in vista, vince quello.
-    let attenuatoHover = null;
-    const spegniAttenuato = () => {
-      if (attenuatoHover == null) return;
-      map.setFeatureState({ source: "enti", id: attenuatoHover }, { hover: false });
-      attenuatoHover = null;
-    };
-    map.on("mousemove", (ev) => {
-      const sopraInVista = map.queryRenderedFeatures(ev.point, { layers: LAYER_MARKER }).some(inVista);
-      const f = sopraInVista ? null : map.queryRenderedFeatures(ev.point, { layers: ["enti-cerchio"] })[0];
-      const id = f ? f.id : null;
-      if (!sopraInVista) map.getCanvas().style.cursor = id != null ? "pointer" : "";
-      if (id === attenuatoHover) return;
-      spegniAttenuato();
-      if (id != null) { attenuatoHover = id; map.setFeatureState({ source: "enti", id }, { hover: true }); }
-    });
-    mapEl.addEventListener("mouseleave", spegniAttenuato);
-    // Clic: su un marker non pertinente lo apre; su un punto vuoto chiude la scheda e torna al tab.
     map.on("click", (ev) => {
-      const sotto = map.queryRenderedFeatures(ev.point, { layers: LAYER_MARKER }).filter(inVista);
-      if (sotto.length) return;
-      const f = map.queryRenderedFeatures(ev.point, { layers: ["enti-cerchio"] })[0];
-      const serviziQui = f ? serviziPresso(f.properties.id) : [];
-      if (serviziQui.length) { spegniAttenuato(); apriScheda(f.properties.id, serviziQui, { rami: true }); }
-      else chiudiScheda();
+      const f = map.queryRenderedFeatures(ev.point, { layers: ["enti-punti"] })[0];
+      if (f) apriScheda(f.properties.id);
+      else if (!map.queryRenderedFeatures(ev.point, { layers: ["enti-aperto"] }).length) chiudiScheda();
     });
+
+    // Il domicilio sopra a tutto (marker e rami compresi).
+    if (map.getLayer("domicilio-icona")) map.moveLayer("domicilio-icona");
   });
 
-  // ---------- evidenza (hover): marker ingrandito, voci delle liste e nomi nella chat evidenziati;
-  // con { linea: true } anche la linea tratteggiata dal domicilio con il tempo a piedi (Ricevere b),
-  // con { fumetto: true } (solo dal marker sulla mappa) il fumetto con il nome del servizio.
+  // ---------- evidenza (hover): voci delle liste e nomi nella chat evidenziati; con { linea: true }
+  // anche la linea tratteggiata dal domicilio con il tempo a piedi (Ricevere b), con { fumetto: true }
+  // (solo dal marker sulla mappa) il fumetto con il nome dell'ente. I marker non crescono in hover.
   let evidenza = null;
 
   // Due linee del tempo possibili insieme: quella del marker selezionato (resta finché è selezionato)
-  // e quella del marker in hover. Ognuna ha la sua pillola. La pillola sta dentro un contenitore:
-  // Mapbox scrive un'opacità in linea sull'elemento del marker, che vincerebbe sulla classe .mostra.
+  // e quella del marker in hover. Ognuna ha la sua pillola (componente comune, vedi condiviso.js).
   function creaLinea(id) {
-    const pillola = Object.assign(document.createElement("div"), { className: "pillola-tempo pillola-tempo--caregiver" });
-    const contenitore = Object.assign(document.createElement("div"), { className: "pillola-contenitore" });
-    contenitore.append(pillola);
-    const etichetta = new mapboxgl.Marker({ element: contenitore, anchor: "center" }).setLngLat([0, 0]).addTo(map);
-    return { id, pillola, etichetta, ente: null, feature: null, timeout: null };
+    // Pillola sintetica («11 min»), come nel case manager.
+    return { id, pillola: creaPillolaMinuti(map, { sintetica: true }), ente: null, feature: null, timeout: null };
   }
   const lineaScelta = creaLinea(0);
   const lineaHover = creaLinea(1);
@@ -649,15 +499,9 @@ window.startApp = async function () {
   function tracciaLinea(l) {
     const ente = enteById[l.ente];
     // Da punta d'ago a punta d'ago: dal luogo del domicilio al luogo dell'ente.
-    const seg = segmentoLineaTempo(map, [DOMICILIO.lon, DOMICILIO.lat], 0,
-      [ente.lon, ente.lat], 0); // arriva alla punta dell'ago, cioè al luogo
-    const [a, b] = seg.geometry.coordinates;
-    // campionaCurva piega verso destra guardando da a verso b: per avere sempre la pancia verso
-    // l'alto, si inverte il verso quando andando da a a b si va verso est (la destra è il sud).
-    const versoEst = map.project(b).x > map.project(a).x;
-    const punti = versoEst ? campionaCurva(b, a, LINEA_MINUTI_CURVATURA).reverse() : campionaCurva(a, b, LINEA_MINUTI_CURVATURA);
-    l.feature = { ...seg, id: l.id, geometry: { type: "LineString", coordinates: punti } };
-    l.etichetta.setLngLat(punti[Math.floor(punti.length / 2)]); // la pillola a metà dell'arco
+    const punti = arcoMinuti(map, [DOMICILIO.lon, DOMICILIO.lat], [ente.lon, ente.lat]);
+    l.feature = { type: "Feature", id: l.id, properties: {}, geometry: { type: "LineString", coordinates: punti } };
+    l.pillola.sposta(posizioniPilloleMinuti(map, [punti])[0]); // la pillola a metà dell'arco
   }
   function mostraLinea(l, enteId, { dissolvenza = true } = {}) {
     if (!mappaPronta) return;
@@ -665,9 +509,7 @@ window.startApp = async function () {
     l.ente = enteId;
     tracciaLinea(l);
     pubblicaLinee();
-    const m = minuti(enteId);
-    l.pillola.innerHTML = pillolaTempoHtml(m == null ? "—" : "a " + m + " min");
-    l.pillola.classList.add("mostra");
+    l.pillola.mostra(posizioniPilloleMinuti(map, [l.feature.geometry.coordinates])[0], testoMinuti(minuti(enteId), { sintetica: true }));
     if (dissolvenza) {
       map.setFeatureState({ source: "tempo-linea", id: l.id }, { comparso: false });
       requestAnimationFrame(() => { if (l.ente === enteId) map.setFeatureState({ source: "tempo-linea", id: l.id }, { comparso: true }); });
@@ -679,7 +521,7 @@ window.startApp = async function () {
     if (l.ente == null) return;
     l.ente = null;
     map.setFeatureState({ source: "tempo-linea", id: l.id }, { comparso: false });
-    l.pillola.classList.remove("mostra");
+    l.pillola.nascondi();
     if (l.timeout) clearTimeout(l.timeout);
     const togli = () => { l.timeout = null; if (l.ente == null) { l.feature = null; pubblicaLinee(); } };
     if (subito) togli();
@@ -699,10 +541,8 @@ window.startApp = async function () {
   function evidenzia(enteId, { linea, fumetto = false }) {
     spegniEvidenza();
     evidenza = enteId;
-    enteInHover = enteId;
     segnaElementi(enteId, true);
     if (!mappaPronta) return;
-    aggiornaMappa();
     const selezionatoId = stato.scheda ? stato.scheda.enteId : null;
     // Il selezionato ha già la sua linea: niente seconda linea sopra la stessa.
     if (linea && enteId !== selezionatoId) mostraLinea(lineaHover, enteId);
@@ -712,11 +552,9 @@ window.startApp = async function () {
     if (evidenza == null) return;
     segnaElementi(evidenza, false);
     evidenza = null;
-    enteInHover = null;
     if (!mappaPronta) return;
-    aggiornaMappa();
     nascondiLinea(lineaHover);
-    popupServizio.remove();
+    fumetto.nascondi();
   }
 
   // ---------- rami e relazioni del servizio selezionato
@@ -754,7 +592,7 @@ window.startApp = async function () {
   function aggiornaRelazione() {
     scopertiRelazione = new Map();
     const tipo = stato.tipoRelazione;
-    const rel = stato.scheda && tipo ? scenario.relazioni.find((r) => r.da === stato.scheda.enteId) : null;
+    const rel = stato.scheda && stato.scheda.servizio && tipo ? scenario.relazioni.find((r) => r.da === stato.scheda.enteId) : null;
     const lista = rel ? (tipo === "anche_per_te" ? rel.anche_per_te : rel.simili) : [];
     lista.forEach((d) => scopertiRelazione.set(d.ente, d.servizio));
     if (!mappaPronta) return;
@@ -768,121 +606,55 @@ window.startApp = async function () {
     mostraRami(coord(stato.scheda.enteId), lista.map((d) => coord(d.ente)));
   }
 
-  // ---------- scheda del marker («servizio presso ente»)
-  // I servizi che un marker in vista rappresenta in questo momento: i salvati presso quell'ente; se
-  // non ce ne sono, quelli dei pacchetti accesi (tab «Consigliati»); se no, quello della relazione.
-  function serviziInVistaAEnte(enteId) {
-    const salvatiQui = stato.salvati.filter((id) => enteDi(id) === enteId);
-    if (salvatiQui.length) return salvatiQui;
-    if (stato.tab === "consigliati") {
-      for (const p of stato.pacchetti) {
-        if (!p.acceso) continue;
-        const qui = vociVisibili(p).filter((v) => enteDi(v.servizio) === enteId).map((v) => v.servizio);
-        if (qui.length) return qui;
-      }
-    }
-    return scopertiRelazione.has(enteId) ? [scopertiRelazione.get(enteId)] : [];
-  }
-
-  // Da che lato del marker esce il fumetto: sopra, sotto, a destra o a sinistra, quello che copre
-  // meno la linea dei minuti e i rami che arrivano al marker. A parità, sopra. Evita anche i lati in
-  // cui il fumetto uscirebbe dalla mappa.
-  const FUMETTO_LATI = [ // "anchor" di Mapbox = il lato del fumetto agganciato al marker
-    { anchor: "bottom", v: [0, -1] }, // fumetto sopra
-    { anchor: "top", v: [0, 1] }, // sotto
-    { anchor: "left", v: [1, 0] }, // a destra
-    { anchor: "right", v: [-1, 0] }, // a sinistra
-  ];
-  const FUMETTO_MARGINE_BASSO = 60; // px in fondo alla mappa riservati alla pillola del quartiere
-  const FUMETTO_SOTTO_AGO = 4; // px fra la punta dell'ago e il fumetto, quando esce sotto
-  // ingombro: larghezza e altezza vere del fumetto, misurate dopo averlo disegnato.
-  function ancoraggioFumetto(ente, testa, ingombro) {
-    const p = map.project([ente.lon, ente.lat]); // la punta dell'ago
-    const raggio = testa.raggio;
-    // Direzioni (dal marker) delle linee che partono o arrivano qui: un punto un po' dentro la linea.
-    const direzioni = [];
-    const linee = [lineaScelta.feature, lineaHover.feature, ...ramiCorrenti.features].filter(Boolean);
-    for (const f of linee) {
-      const c = f.geometry.coordinates;
-      for (const [capo, verso] of [[0, 1], [c.length - 1, -1]]) {
-        const q0 = map.project(c[capo]);
-        if (Math.hypot(q0.x - p.x, q0.y - p.y) > raggio + 12) continue;
-        const q = map.project(c[capo + verso * Math.max(1, Math.round(c.length * 0.15))]);
-        const d = Math.hypot(q.x - p.x, q.y - p.y);
-        if (d > 0) direzioni.push([(q.x - p.x) / d, (q.y - p.y) / d]);
-      }
-    }
-    const { width: W, height: H } = map.getCanvas().getBoundingClientRect();
-    const fuori = {
-      bottom: p.y - testa.altezza - raggio - ingombro.altezza < 0,
-      top: p.y + FUMETTO_SOTTO_AGO + ingombro.altezza > H - FUMETTO_MARGINE_BASSO,
-      left: p.x + raggio + ingombro.larghezza > W,
-      right: p.x - raggio - ingombro.larghezza < 0,
-    };
-    let migliore = null;
-    for (const lato of FUMETTO_LATI) {
-      // Quanto il lato "guarda" verso la linea più vicina: 1 = proprio sopra, −1 = dalla parte opposta.
-      let punteggio = direzioni.reduce((m, d) => Math.max(m, lato.v[0] * d[0] + lato.v[1] * d[1]), -1);
-      if (fuori[lato.anchor]) punteggio += 2;
-      if (!migliore || punteggio < migliore.punteggio - 0.01) migliore = { anchor: lato.anchor, punteggio };
-    }
-    return migliore.anchor;
-  }
-
-  // Fumetto con il nome del servizio: solo in hover sul marker (non al clic).
+  // ---------- fumetto in hover sul marker: il solo nome dell'ente, nel colore del suo dominio, con lo
+  // stesso componente del case manager (fumettoServizio, creaFumetto). Non sul marker aperto.
   function mostraFumetto(enteId) {
+    if (stato.scheda && stato.scheda.enteId === enteId) return;
     const ente = enteById[enteId];
-    const servizi = stato.scheda && stato.scheda.enteId === enteId ? stato.scheda.servizi : serviziInVistaAEnte(enteId);
-    if (!servizi.length) return;
-    // La testa della puntina (ingrandita, in hover): quanto sta sopra la punta e quanto è larga.
-    const f = geojsonEnti.features[featureIndexPerEnte[enteId]];
-    const forma = f.properties.stato === "consigliato" ? "rombo" : "cerchio";
-    const scala = (raggioAZoom(MARKER_RAGGIO, map.getZoom()) / MARKER_RAGGIO[14]) * MARKER_FATTORE_HOVER;
-    const testa = {
-      altezza: altezzaTesta(forma) * scala,
-      raggio: (forma === "rombo" ? MARKER_RAGGIO[14] * MARKER_ROMBO_RAPPORTO : MARKER_RAGGIO[14]) * scala + MARKER_BORDO,
-    };
-    // La punta del fumetto tocca la testa: sopra, a destra o a sinistra; oppure sta sotto l'ago.
-    const offset = {
-      bottom: [0, -(testa.altezza + testa.raggio)],
-      top: [0, FUMETTO_SOTTO_AGO],
-      left: [testa.raggio, -testa.altezza],
-      right: [-testa.raggio, -testa.altezza],
-    };
-    // Prima lo si disegna per misurarlo, poi si sceglie il lato (Mapbox non ha un setAnchor: si
-    // cambia l'opzione e si riposiziona).
-    popupServizio.options.anchor = "bottom";
-    popupServizio.setOffset(offset).setLngLat([ente.lon, ente.lat])
-      .setHTML(fumettoServizio({ titolo: titoloServizio(servizi[0]) }, ente)).addTo(map);
-    const r = popupServizio.getElement().getBoundingClientRect();
-    const lato = ancoraggioFumetto(ente, testa, { larghezza: r.width, altezza: r.height });
-    if (lato !== "bottom") { popupServizio.options.anchor = lato; popupServizio.setLngLat([ente.lon, ente.lat]); }
+    const linee = [lineaScelta.feature, lineaHover.feature, ...ramiCorrenti.features].filter(Boolean).map((f) => f.geometry.coordinates);
+    fumetto.mostra([ente.lon, ente.lat], `<span style="color:${COLORI[ente.macro_dominio] || COLORE_CLUSTER}">${ente.nome}</span>`,
+      { altezza: 0, raggio: PUNTINO_RAGGIO }, linee);
   }
 
-  // { rami: true } accende «Simili a questo» (clic su un marker o su una voce: Esplorare a); dalla
-  // chat i rami restano spenti e si accendono solo dal selettore (Conversare b).
-  function apriScheda(enteId, serviziQui, { rami }) {
-    if (stato.scheda && stato.scheda.enteId === enteId) return;
-    stato.scheda = { enteId, servizi: serviziQui };
-    stato.tipoRelazione = rami ? "simili" : null;
+  // ---------- schede (come nel case manager): dell'ente al clic su un marker, su una voce o su un
+  // nome nella chat; del servizio al clic su un servizio della scheda dell'ente (rami accesi su
+  // «Simili a questo»). La freccia indietro torna all'ente (rami spenti); la × chiude.
+  function apriScheda(enteId) {
+    if (stato.scheda && stato.scheda.enteId === enteId && !stato.scheda.servizio) return;
+    stato.scheda = { enteId, servizio: null };
+    stato.tipoRelazione = null;
+    stato.infoAperte = false;
     aggiornaRelazione();
     aggiornaMappa();
     disegnaPannello();
     aggiornaChat();
     if (!mappaPronta) return;
-    // Al clic il fumetto sparisce (torna ripassando sopra il marker) e compare la linea del tempo,
-    // che resta finché il marker è selezionato. Se la linea c'era già per l'hover, passa senza scatti.
-    popupServizio.remove();
+    // Al clic il fumetto sparisce e compare la linea del tempo, che resta finché la scheda è aperta.
+    fumetto.nascondi();
     const giaInHover = lineaHover.ente === enteId;
     nascondiLinea(lineaHover, { subito: true });
     nascondiLinea(lineaScelta, { subito: true });
     mostraLinea(lineaScelta, enteId, { dissolvenza: !giaInHover });
   }
+  function scegliServizio(servizioId) {
+    stato.scheda.servizio = servizioId;
+    stato.tipoRelazione = "simili";
+    aggiornaRelazione();
+    aggiornaMappa();
+    disegnaPannello();
+  }
+  function tornaAllEnte() {
+    stato.scheda.servizio = null;
+    stato.tipoRelazione = null;
+    aggiornaRelazione();
+    aggiornaMappa();
+    disegnaPannello();
+  }
   function chiudiScheda() {
     if (!stato.scheda) return;
     stato.scheda = null;
     stato.tipoRelazione = null;
-    popupServizio.remove();
+    fumetto.nascondi();
     if (mappaPronta) nascondiLinea(lineaScelta);
     aggiornaRelazione();
     aggiornaMappa();
@@ -940,50 +712,137 @@ window.startApp = async function () {
     </section>`;
   }
 
-  function htmlScheda() {
-    const { enteId, servizi: ids } = stato.scheda;
-    const ente = enteById[enteId];
-    const [principale, ...altri] = ids.map((id) => servizioById[id]);
-    const tuttiSalvati = ids.every(isSalvato);
-    const descrizione = (s) => (s.descrizione ? `<p>${s.descrizione}</p>` : "");
-    const pulsante = (tipo, testo) =>
-      `<button type="button" class="selettore-relazioni__pulsante${stato.tipoRelazione === tipo ? " attivo" : ""}" data-relazione="${tipo}">${testo}</button>`;
-    return `<div class="scheda">
-      <button type="button" class="panel__close" data-azione="chiudi" aria-label="Chiudi la scheda">×</button>
-      <p class="eyebrow">Servizio presso ente</p>
-      <h2>${titoloServizio(principale.id)}</h2>
-      <p class="meta">${ente.nome}${ente.indirizzo ? " — " + ente.indirizzo : ""}</p>
-      <p class="meta">${testoTempo(enteId)}</p>
-      ${descrizione(principale)}
-      ${vociCaneHtml(principale.bisogni)}
-      ${altri.map((s) => `<div class="scheda__altro">
-        <p class="eyebrow">Anche qui</p>
-        <p><b>${titoloServizio(s.id)}</b></p>
-        ${descrizione(s)}
-        ${vociCaneHtml(s.bisogni)}
-      </div>`).join("")}
-      <button type="button" class="scheda__salva" data-azione="salva"${tuttiSalvati ? " disabled" : ""}>
-        ${iconaSegnalibro(tuttiSalvati)} ${tuttiSalvati ? "Salvato" : "Salva"}
-      </button>
-      <div class="selettore-relazioni">
-        ${pulsante("simili", "Simili a questo")}
-        ${pulsante("anche_per_te", "Anche per te")}
+  // ---------- schede dell'ente e del servizio: stesso markup e stesse classi del case manager (.cm-*,
+  // sezione «Case manager» di css/style.css), dentro la tendina sinistra.
+  const svgChiudi = '<svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6 L18 18 M18 6 L6 18" stroke="#57554F" stroke-width="2" stroke-linecap="round"></path></svg>';
+  const svgChevron = '<svg class="cm-servizio__freccia" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6 L15 12 L9 18" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  const svgPedone = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="13" cy="4" r="2" fill="currentColor"></circle><path d="M9 21 L11 14 L14 16 L14 21 M11 14 L12 8 L16 11 L19 12 M12 8 L8 10 L7 13" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  const svgIndicazioni = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 L22 12 L12 22 L2 12 Z" stroke="#57554F" stroke-width="1.8" fill="none" stroke-linejoin="round"></path><path d="M9 14 V11 H15 M13 9 L15 11 L13 13" stroke="#57554F" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  const svgSito = '<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="#57554F" stroke-width="1.8" fill="none"></circle><path d="M3 12 H21 M12 3 C 8 7, 8 17, 12 21 M12 3 C 16 7, 16 17, 12 21" stroke="#57554F" stroke-width="1.6" fill="none"></path></svg>';
+  const svgFoto = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" stroke="#6B6A65" stroke-width="1.6" fill="none"></rect><circle cx="9" cy="10" r="1.8" fill="#6B6A65"></circle><path d="M4 18 L10 13 L14 16 L17 13 L21 17" stroke="#6B6A65" stroke-width="1.6" fill="none" stroke-linejoin="round"></path></svg>';
+  const svgIndietro = '<svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6 L9 12 L15 18" stroke="#57554F" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>';
+  const svgFreccia = (su) => `<svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="${su ? "M6 15 L12 9 L18 15" : "M6 9 L12 15 L18 9"}" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path></svg>`;
+  const etichetteCane = (ids, grandi) => `<div class="cm-etichette${grandi ? " cm-etichette--grandi" : ""}">${ids.map((b) => `<span class="cm-tag">${nomeBisogno(b)}</span>`).join("")}</div>`;
+  // I servizi dell'ente, una volta sola ciascuno, nell'ordine dei bisogni del CANE.
+  function serviziEnte(enteId) {
+    const lista = servizi.filter((sv) => sv.sede === enteId);
+    const ordine = bisogni.map((b) => b.id);
+    const primo = (sv) => Math.min(...sv.bisogni.map((b) => (ordine.indexOf(b) + 1) || 999), 999);
+    return lista.slice().sort((a, b) => primo(a) - primo(b));
+  }
+  const testoTempoScheda = (enteId) => `${minuti(enteId) ?? "—"} min a piedi dal domicilio`;
+
+  function htmlSchedaEnte() {
+    const e = enteById[stato.scheda.enteId];
+    const lista = serviziEnte(e.id);
+    const foto = FOTO_DEGLI_ENTI[e.id];
+    const card = (sv) => `
+      <button type="button" class="cm-servizio" data-servizio="${sv.id}">
+        <span class="cm-servizio__testo">
+          <span class="cm-servizio__nome">${titoloServizio(sv.id)}</span>
+          ${etichetteCane(sv.bisogni, false)}
+        </span>${svgChevron}
+      </button>`;
+    return `<div class="cm-scheda__pagina"><div class="cm-scheda__scorri">
+      <div class="cm-intestazione">
+        <div class="cm-intestazione__blocco">
+          <div class="cm-intestazione__riga">
+            <div class="cm-sopratitolo">${e.categoria_origine || e.categoria || ""}</div>
+            <button type="button" class="cm-chiudi" data-azione="chiudi" aria-label="Chiudi la scheda">${svgChiudi}</button>
+          </div>
+          <h2 class="cm-titolo cm-titolo--ente">${e.nome}</h2>
+          <div class="cm-indirizzo">${e.indirizzo || "[Indirizzo dell'ente], Milano"}</div>
+        </div>
+        <div class="cm-intestazione__azioni">
+          <span class="cm-tempo">${svgPedone}${testoTempoScheda(e.id)}</span>
+          <div class="cm-tondi">
+            <button type="button" class="cm-tondo" aria-label="Indicazioni">${svgIndicazioni}</button>
+            <button type="button" class="cm-tondo" aria-label="Sito dell'ente">${svgSito}</button>
+          </div>
+        </div>
       </div>
-    </div>`;
+      <div class="cm-foto">${foto ? `<img class="cm-foto__immagine" src="${foto}" alt="${e.nome}">` : `${svgFoto}Foto dell'ente`}</div>
+      <div class="cm-servizi-titolo"><span>Servizi offerti</span><span class="cm-servizi-titolo__conta">${lista.length}</span></div>
+      ${lista.length ? `<div class="cm-lista cm-lista--ultima">${lista.map(card).join("")}</div>` : '<p class="cm-vuoto">Nessun servizio registrato per questo ente.</p>'}
+      <div class="cm-info">
+        <button type="button" class="cm-info__testata" data-azione="info" aria-expanded="${!!stato.infoAperte}">
+          <span class="cm-info__titoli"><span class="cm-info__titolo">Informazioni sull'ente</span><span class="cm-info__sottotitolo">Orari, contatti, descrizione</span></span>
+          <span class="cm-info__freccia">${svgFreccia(stato.infoAperte)}</span>
+        </button>
+        ${stato.infoAperte ? `<div class="cm-righe cm-righe--info">
+          <div class="cm-righe__riga"><span>Orari</span><span>[Giorni e orari di apertura]</span></div>
+          <div class="cm-righe__riga"><span>Contatti</span><span>[Telefono · email]</span></div>
+          <div class="cm-righe__riga"><span>Descrizione</span><span>[Breve descrizione dell'ente]</span></div>
+        </div>` : ""}
+      </div>
+    </div></div>`;
+  }
+
+  // Le relazioni del caregiver nel riquadro della scheda del servizio, con il campione del ramo
+  // come nel case manager: «Simili a questo» = l'equivalenza (freccia doppia), «Anche per te» =
+  // «Anche per chi assiste» (tratteggio tenue).
+  const RELAZIONI_CAREGIVER = [
+    { tipo: "simili", nome: "Simili a questo", frecciaFine: true, frecciaInizio: true },
+    { tipo: "anche_per_te", nome: "Anche per te", tratteggio: true },
+  ];
+  function htmlSchedaServizio() {
+    const { enteId, servizio: id } = stato.scheda;
+    const e = enteById[enteId];
+    const sv = servizioById[id];
+    const rel = scenario.relazioni.find((r) => r.da === enteId);
+    const relazioni = RELAZIONI_CAREGIVER.map((r) => {
+      const n = rel ? rel[r.tipo].length : 0;
+      const attiva = stato.tipoRelazione === r.tipo;
+      return `<button type="button" class="cm-relazione${attiva ? " attiva" : ""}" data-relazione="${r.tipo}" aria-pressed="${attiva}">
+        <svg class="cm-relazione__campione" width="40" height="12" viewBox="0 0 40 12" aria-hidden="true">
+          <path d="M3 6 H37" stroke="currentColor" stroke-width="2.2" fill="none"${r.tratteggio ? ' stroke-dasharray="4 3" opacity="0.7"' : ""}></path>
+          ${r.frecciaFine ? '<path d="M32 2 L37 6 L32 10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>' : ""}
+          ${r.frecciaInizio ? '<path d="M8 2 L3 6 L8 10" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"></path>' : ""}
+        </svg>
+        <span class="cm-relazione__nome">${r.nome}</span>
+        <span class="cm-relazione__conta">${n} ${n === 1 ? "collegato" : "collegati"}</span>
+      </button>`;
+    }).join("");
+    const salvato = isSalvato(id);
+    return `<div class="cm-scheda__pagina"><div class="cm-scheda__scorri">
+      <div class="cm-servizio-testata">
+        <button type="button" class="cm-indietro" data-azione="indietro">${svgIndietro}${e.nome}</button>
+        <button type="button" class="cm-chiudi" data-azione="chiudi" aria-label="Chiudi la scheda">${svgChiudi}</button>
+      </div>
+      <div class="cm-intestazione cm-intestazione--servizio">
+        <div class="cm-intestazione__blocco">
+          <div class="cm-sopratitolo">Servizio · ${e.categoria_origine || e.categoria || ""}</div>
+          <h2 class="cm-titolo">${titoloServizio(id)}</h2>
+        </div>
+        ${etichetteCane(sv.bisogni, true)}
+        <button type="button" class="scheda__salva" data-azione="salva"${salvato ? " disabled" : ""}>${iconaSegnalibro(salvato)} ${salvato ? "Salvato" : "Salva"}</button>
+      </div>
+      <div class="cm-relazioni">
+        <div class="cm-gruppo-titolo cm-gruppo-titolo--relazioni">Relazioni sulla mappa</div>
+        ${relazioni}
+      </div>
+      <div class="cm-righe">
+        <div class="cm-righe__riga"><span>Orari</span><span>[Giorni e orari del servizio]</span></div>
+        <div class="cm-righe__riga"><span>Contatti</span><span>[Referente · telefono · email]</span></div>
+        <div class="cm-righe__riga"><span>Descrizione</span><span>${sv.descrizione || "[Breve descrizione del servizio]"}</span></div>
+      </div>
+    </div></div>`;
   }
 
   function disegnaPannello() {
     spegniEvidenza();
     if (stato.scheda) {
-      panelDx.innerHTML = htmlScheda();
+      const e = enteById[stato.scheda.enteId];
+      panelDx.style.setProperty("--dominio", COLORI[e.macro_dominio] || COLORE_CLUSTER);
+      panelDx.innerHTML = stato.scheda.servizio ? htmlSchedaServizio() : htmlSchedaEnte();
     } else {
       const tab = (id, testo, extra = "") =>
         `<button type="button" class="tab${stato.tab === id ? " attivo" : ""}" role="tab" aria-selected="${stato.tab === id}" data-tab="${id}">${testo}${extra}</button>`;
       const novita = stato.novitaConsigliati ? '<span class="tab__novita" title="Novità"></span>' : "";
       panelDx.innerHTML = `
         <div class="tabs" role="tablist">
-          ${tab("luoghi", "I miei luoghi")}
           ${tab("consigliati", "Consigliati", novita)}
+          ${tab("luoghi", "I miei luoghi")}
         </div>
         <div class="tab-corpo">
           ${stato.tab === "luoghi" ? htmlLuoghi() : stato.pacchetti.map(htmlPacchetto).join("")}
@@ -1004,29 +863,27 @@ window.startApp = async function () {
     }
     const pacchettoEl = t.closest("[data-pacchetto]");
     const p = pacchettoEl && stato.pacchetti.find((x) => x.id === pacchettoEl.dataset.pacchetto);
-    if (p && t.closest(".interruttore")) {
+    // Clic sulla proposta (la sua testata o l'interruttore): si attiva o si spegne sulla mappa.
+    if (p && (t.closest(".interruttore") || t.closest(".pacchetto__titolo"))) {
       p.acceso = !p.acceso;
+      if (p.acceso) p.aperto = true;
       aggiornaMappa();
       disegnaPannello();
       return;
     }
-    if (p && t.closest(".pacchetto__titolo")) {
-      p.aperto = !p.aperto;
-      disegnaPannello();
-      return;
-    }
     const voce = t.closest(".voce");
-    if (voce) {
-      const enteId = voce.dataset.ente;
-      const ids = voce.dataset.collezione === "salvati"
-        ? stato.salvati.filter((id) => enteDi(id) === enteId)
-        : vociVisibili(p).filter((v) => enteDi(v.servizio) === enteId).map((v) => v.servizio);
-      apriScheda(enteId, ids, { rami: true });
+    if (voce) { apriScheda(voce.dataset.ente); return; }
+    const azione = t.closest("[data-azione]");
+    if (azione) {
+      const a = azione.dataset.azione;
+      if (a === "chiudi") chiudiScheda();
+      else if (a === "indietro") tornaAllEnte();
+      else if (a === "info") { stato.infoAperte = !stato.infoAperte; disegnaPannello(); }
+      else if (a === "salva") salva([stato.scheda.servizio]);
       return;
     }
-    const azione = t.closest("[data-azione]");
-    if (azione && azione.dataset.azione === "chiudi") { chiudiScheda(); return; }
-    if (azione && azione.dataset.azione === "salva") { salva(stato.scheda.servizi); return; }
+    const servizio = t.closest("[data-servizio]");
+    if (servizio) { scegliServizio(servizio.dataset.servizio); return; }
     const rel = t.closest("[data-relazione]");
     if (rel) {
       stato.tipoRelazione = stato.tipoRelazione === rel.dataset.relazione ? null : rel.dataset.relazione;
@@ -1104,19 +961,20 @@ window.startApp = async function () {
     return pezzi;
   }
 
-  // Un nome nella risposta: hover → marker acceso; clic → scheda (rami spenti); segnalibro → salva.
+  // Un nome nella risposta: nel colore del dominio dell'ente, in grassetto, senza sfondo; hover →
+  // evidenza; clic → scheda dell'ente; segnalibro → salva.
   function nomeServizio(risposta, enteId, testo) {
     const ids = serviziRispostaAEnte(risposta, enteId);
     const span = document.createElement("span");
     span.className = "chat-nome";
     span.dataset.ente = enteId;
     span.dataset.servizi = ids.join(",");
-    span.innerHTML = `<button type="button" class="chat-nome__testo">${testo}</button>`
+    span.innerHTML = `<button type="button" class="chat-nome__testo" style="color:${COLORI[enteById[enteId].macro_dominio] || COLORE_CLUSTER}">${testo}</button>`
       + `<button type="button" class="segnalibro" aria-label="Salva ${testo}" title="Salva">${iconaSegnalibro(false)}</button>`;
     const [btnNome, btnSalva] = span.children;
     btnNome.addEventListener("mouseenter", () => evidenzia(enteId, { linea: false }));
     btnNome.addEventListener("mouseleave", spegniEvidenza);
-    btnNome.addEventListener("click", () => apriScheda(enteId, ids, { rami: false }));
+    btnNome.addEventListener("click", () => apriScheda(enteId));
     btnSalva.addEventListener("click", () => salva(ids));
     return span;
   }

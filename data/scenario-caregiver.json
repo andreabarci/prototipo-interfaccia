@@ -8,8 +8,8 @@
     "servizi": [
       { "servizio": "O0205", "bisogno": "B16" },
       { "servizio": "O0165", "bisogno": "B16" },
-      { "servizio": "O0160-2", "bisogno": "C02" },
-      { "servizio": "O0054", "bisogno": "C02" }
+      { "servizio": "O0361@E203", "bisogno": "C02" },
+      { "servizio": "O0361@E205", "bisogno": "C02" }
     ]
   },
   "relazioni": [

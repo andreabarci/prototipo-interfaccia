@@ -2,11 +2,11 @@
 Crea lo stile della mappa del caregiver (vedi brief-mappa-caregiver-claude-code-1.md).
 
 Scarica lo stile classico Outdoors di Mapbox (outdoors-v12) con la Styles API, applica la palette
-«Carta e salvia» e le regole del brief, e salva il risultato in data/stile-caregiver.json, letto
-da js/caregiver.js (voce mapStyleCaregiver in js/config.js).
+«Carta e salvia» e le regole del brief, e salva il risultato in data/stile-mappa.json, letto
+da entrambe le pagine, case manager e caregiver (voce mapStyle in js/config.js).
 
 Uso, dalla cartella del progetto:
-    python3 strumenti/crea_stile_caregiver.py
+    python3 strumenti/crea_stile_mappa.py
 
 Per cambiare un colore: modificalo in PALETTE qui sotto e rilancia lo script; poi ricarica la
 pagina su Go Live. Il file generato non va modificato a mano: verrebbe sovrascritto.
@@ -22,7 +22,7 @@ import urllib.request
 from pathlib import Path
 
 RADICE = Path(__file__).resolve().parent.parent
-USCITA = RADICE / "data" / "stile-caregiver.json"
+USCITA = RADICE / "data" / "stile-mappa.json"
 STILE_DI_PARTENZA = "mapbox/outdoors-v12"
 
 # ---------------------------------------------------------------------------------------------
@@ -84,11 +84,12 @@ ETICHETTE = {
     "luoghi_dimensione": 11,         # px
 }
 
-# Punti di interesse tenuti (campo "class" dei dati Mapbox, controllato sulla zona del domicilio):
-# luoghi di culto e servizi pubblici (uffici postali, centri civici, commissariati...). In più
-# i mercati (type "Marketplace") e i nomi di parchi e giardini (class "park_like"). Tutto il resto
-# (negozi, ristoranti, bar, banche, carburante...) è spento.
-POI_CLASSI_TENUTE = ["religion", "public_facilities"]
+# Punti di interesse tenuti (campo "class" dei dati Mapbox, controllato sulla zona del domicilio).
+# Chiese e altri luoghi di culto ("religion") ed edifici pubblici e monumenti ("public_facilities")
+# tolti su richiesta di Andrea (affollavano la mappa): restano i mercati (type "Marketplace") e i
+# nomi di parchi e giardini (class "park_like"). Tutto il resto (negozi, ristoranti, bar, banche,
+# carburante...) è spento. Per riaccendere una classe, aggiungila qui (es. "religion").
+POI_CLASSI_TENUTE = []
 POI_PARCHI_MAKI = ["park", "garden"]
 
 # ---------------------------------------------------------------------------------------------
@@ -148,7 +149,7 @@ def main():
         "version": originale["version"],
         "name": "Caregiver · Carta e salvia",
         "metadata": {
-            "generato-da": "strumenti/crea_stile_caregiver.py",
+            "generato-da": "strumenti/crea_stile_mappa.py",
             "stile-di-partenza": STILE_DI_PARTENZA,
             "nota": "File generato: non modificarlo a mano, cambia la palette nello script e rilancialo.",
         },
@@ -295,7 +296,7 @@ def main():
     poi = livello("poi-label")
     poi["minzoom"] = ETICHETTE["luoghi_zoom_da"]
     poi["filter"] = ["any",
-                     ["match", ["get", "class"], POI_CLASSI_TENUTE, True, False],
+                     *([["match", ["get", "class"], POI_CLASSI_TENUTE, True, False]] if POI_CLASSI_TENUTE else []),
                      ["==", ["get", "type"], "Marketplace"],
                      ["all", ["==", ["get", "class"], "park_like"],
                       ["match", ["get", "maki"], POI_PARCHI_MAKI, True, False]]]
